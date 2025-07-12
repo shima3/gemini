@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gemini Chat App</title>
+  <title>AI Chat by ChatGPT</title>
   <style>
     body {
       font-family: sans-serif;
@@ -61,11 +61,35 @@
       color: red;
       font-weight: bold;
     }
+    #dropZone {
+      border: 2px dashed #aaa;
+      padding: 1rem;
+      text-align: center;
+      margin-bottom: 1rem;
+      background: #f9f9f9;
+    }
+    .attachment {
+      background: #eee;
+      padding: 0.5rem;
+      margin: 0.2rem 0;
+      border-radius: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .attachment span {
+      flex-grow: 1;
+    }
+    .attachment button {
+      background: transparent;
+      border: none;
+      color: red;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1>Gemini Chat App</h1>
+    <h1>AI Chat by ChatGPT</h1>
   </header>
   <main>
     <div>
@@ -73,6 +97,8 @@
       <input type="text" id="apiKey" placeholder="AI StudioのAPIキーを入力" />
     </div>
     <div id="chat"></div>
+    <div id="dropZone">ここにファイルをドロップしてください</div>
+    <div id="attachments"></div>
     <form id="chatForm">
       <input type="text" id="userInput" placeholder="メッセージを入力" required />
       <button type="submit">送信</button>
@@ -88,12 +114,58 @@
     const chatForm = document.getElementById('chatForm');
     const userInput = document.getElementById('userInput');
     const errorEl = document.getElementById('error');
-
+    const dropZone = document.getElementById('dropZone');
+    const attachments = document.getElementById('attachments');
     let apiKey = '';
+    let files = [];
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedKey = localStorage.getItem('gemini_api_key');
+      if (savedKey) {
+        apiKey = savedKey;
+        apiKeyInput.value = savedKey;
+      }
+    });
 
     apiKeyInput.addEventListener('change', () => {
       apiKey = apiKeyInput.value.trim();
+      if (apiKey) {
+        localStorage.setItem('gemini_api_key', apiKey);
+      }
     });
+
+    dropZone.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropZone.style.background = '#e0e0e0';
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.style.background = '#f9f9f9';
+    });
+
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.style.background = '#f9f9f9';
+      for (const file of e.dataTransfer.files) {
+        files.push(file);
+        renderAttachments();
+      }
+    });
+
+    function renderAttachments() {
+      attachments.innerHTML = '';
+      files.forEach((file, index) => {
+        const div = document.createElement('div');
+        div.className = 'attachment';
+        div.innerHTML = `<span>${file.name}</span><button onclick="removeAttachment(${index})">×</button>`;
+        attachments.appendChild(div);
+      });
+    }
+
+    function removeAttachment(index) {
+      files.splice(index, 1);
+      renderAttachments();
+    }
 
     chatForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -105,15 +177,22 @@
       errorEl.textContent = '';
       appendMessage('ユーザー', message);
       userInput.value = '';
+
+      const parts = [];
+      if (message) parts.push({ text: message });
+
+      for (const file of files) {
+        const base64 = await toBase64(file);
+        parts.push({ inlineData: { mimeType: file.type, data: base64.split(',')[1] } });
+      }
+      files = [];
+      renderAttachments();
+
       try {
         const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=' + apiKey, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: message }] }]
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts }] })
         });
         const data = await res.json();
         if (res.ok && data.candidates) {
@@ -126,6 +205,15 @@
         errorEl.textContent = 'エラー: ' + err.message;
       }
     });
+
+    function toBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
 
     function appendMessage(sender, text, isAI = false) {
       const div = document.createElement('div');

@@ -159,11 +159,22 @@
         div.className = 'attachment';
         const nameSpan = document.createElement('span');
         nameSpan.textContent = file.name;
+        const downloadLink = document.createElement('a');
+        downloadLink.textContent = '📥';
+        downloadLink.href = URL.createObjectURL(file);
+        downloadLink.download = file.name;
+        downloadLink.title = 'このファイルをダウンロード';
+        downloadLink.style.marginRight = '0.5rem';
         const removeBtn = document.createElement('button');
         removeBtn.textContent = '×';
         removeBtn.addEventListener('click', () => removeAttachment(index));
+        const controlDiv = document.createElement('div');
+        controlDiv.style.display = 'flex';
+        controlDiv.style.alignItems = 'center';
+        controlDiv.appendChild(downloadLink);
+        controlDiv.appendChild(removeBtn);
         div.appendChild(nameSpan);
-        div.appendChild(removeBtn);
+        div.appendChild(controlDiv);
         attachments.appendChild(div);
       });
     }
@@ -191,8 +202,6 @@
         const base64 = await toBase64(file);
         parts.push({ inlineData: { mimeType: file.type, data: base64.split(',')[1] } });
       }
-      files = [];
-      renderAttachments();
 
       try {
         const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=' + apiKey, {
@@ -204,6 +213,9 @@
         if (res.ok && data.candidates) {
           const aiText = data.candidates[0].content.parts.map(p => p.text).join('');
           appendMessage('Gemini', aiText, true);
+          // ✅ 成功時のみ添付ファイルをクリア
+          files = [];
+          renderAttachments();
         } else {
           throw new Error(data.error?.message || '不明なエラー');
         }
@@ -222,14 +234,12 @@
     }
 
     function escapeHtml(unsafe) {
-      return unsafe.replace(/[&<>"]/g, function (m) {
-        return {
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          '"': '&quot;'
-        }[m];
-      });
+      return unsafe.replace(/[&<>"]/g, m => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;'
+      })[m]);
     }
 
     function appendMessage(sender, text, isAI = false) {

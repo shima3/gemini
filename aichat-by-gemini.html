@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Chat App (All Files)</title>
+    <title>Gemini Chat App (最終修正版)</title>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
     <style>
         /* CSSは変更ありません */
@@ -80,6 +81,35 @@
         code.hljs { padding: 0; background: none; }
         .error-message { background-color: #f8d7da !important; color: #721c24 !important; border: 1px solid #f5c6cb; }
         .hidden { display: none !important; }
+
+        #typing-indicator {
+            display: flex;
+            align-items: center;
+            background-color: #e9e9eb;
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+            align-self: flex-start;
+            padding: 12px 15px;
+        }
+        .typing-dot {
+            height: 8px;
+            width: 8px;
+            background-color: #8e8e93;
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: typing-blink 1.4s infinite both;
+        }
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        @keyframes typing-blink {
+            0% { opacity: 0.2; }
+            20% { opacity: 1; }
+            100% { opacity: 0.2; }
+        }
     </style>
 </head>
 <body>
@@ -120,12 +150,11 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // ----- DOM要素の取得 (変更なし) -----
+        // --- DOM要素の取得など（変更なし） ---
         const apiKeyContainer = document.getElementById('api-key-container');
         const apiKeyInput = document.getElementById('api-key-input');
         const apiKeySubmit = document.getElementById('api-key-submit');
         const chatContainer = document.getElementById('chat-container');
-        const chatHeader = document.getElementById('chat-header');
         const chatHistory = document.getElementById('chat-history');
         const chatForm = document.getElementById('chat-form');
         const messageInput = document.getElementById('message-input');
@@ -137,26 +166,16 @@
         const filePreviewContainer = document.getElementById('file-preview-container');
 
         let genAI;
-        let chat;
         let attachedFiles = [];
+        // ▼▼▼ 追加: 送信中の状態を管理するフラグ ▼▼▼
+        let isSubmitting = false;
 
-        // ----- 初期化処理 (変更なし) -----
+        // --- 初期化処理（変更なし） ---
         const savedApiKey = localStorage.getItem('geminiApiKey');
-        if (savedApiKey) {
-            initializeApp(savedApiKey);
-        } else {
-            apiKeyContainer.classList.remove('hidden');
-        }
-        
-        // ----- イベントリスナー (変更なし) -----
+        if (savedApiKey) { initializeApp(savedApiKey); } else { apiKeyContainer.classList.remove('hidden'); }
         apiKeySubmit.addEventListener('click', () => {
             const key = apiKeyInput.value.trim();
-            if (key) {
-                localStorage.setItem('geminiApiKey', key);
-                initializeApp(key);
-            } else {
-                alert('APIキーを入力してください。');
-            }
+            if (key) { localStorage.setItem('geminiApiKey', key); initializeApp(key); } else { alert('APIキーを入力してください。'); }
         });
         resetApiKeyButton.addEventListener('click', () => {
             if (confirm('APIキーをリセットしますか？')) {
@@ -165,52 +184,35 @@
                 location.reload();
             }
         });
-        chatForm.addEventListener('submit', handleFormSubmit);
+
+        // ▼▼▼ イベントリスナーの仕組みを全面的に修正 ▼▼▼
+        
+        // フォームの送信イベントに処理を一本化
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            processSubmission();
+        });
+
+        // Enterキー押下時は、標準のフォーム送信リクエストを発火させる
         messageInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                handleFormSubmit(e);
+                // chatFormのsubmitイベントを発火させる、より信頼性の高い方法
+                if (!isSubmitting) {
+                    chatForm.requestSubmit();
+                }
             }
-        });
-        attachFileButton.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (e) => {
-            addFiles(e.target.files);
-            fileInput.value = '';
-        });
-        chatForm.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            chatForm.classList.add('drag-over');
-        });
-        chatForm.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            chatForm.classList.remove('drag-over');
-        });
-        chatForm.addEventListener('drop', (e) => {
-            e.preventDefault();
-            chatForm.classList.remove('drag-over');
-            addFiles(e.dataTransfer.files);
         });
         
-        // ----- 主要な関数 -----
-        function initializeApp(apiKey) { /* 変更なし */ }
-        async function handleFormSubmit(e) { /* 変更なし */ }
-
-        // ▼▼▼ この関数を変更 ▼▼▼
-        function addFiles(files) {
-            for (const file of files) {
-                // ファイルタイプの制限を解除し、どんなファイルでも添付できるようにする
-                attachedFiles.push(file);
-            }
-            renderFilePreviews();
-        }
-        // ▲▲▲ ここまで ▲▲▲
-
-        function renderFilePreviews() { /* 変更なし */ }
-        async function fileToGenerativePart(file) { /* 変更なし */ }
-        function displayMessage(text, sender, isError = false, files = []) { /* 変更なし */ }
-
-        // 変更のない関数定義は、可読性のために省略しています。
-        // 実際のファイルにはすべての関数が含まれています。
+        // --- ファイル関連のイベントリスナー（変更なし） ---
+        attachFileButton.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => { addFiles(e.target.files); fileInput.value = ''; });
+        chatForm.addEventListener('dragover', (e) => { e.preventDefault(); chatForm.classList.add('drag-over'); });
+        chatForm.addEventListener('dragleave', (e) => { e.preventDefault(); chatForm.classList.remove('drag-over'); });
+        chatForm.addEventListener('drop', (e) => { e.preventDefault(); chatForm.classList.remove('drag-over'); addFiles(e.dataTransfer.files); });
+        
+        
+        // --- 主要な関数 ---
         function initializeApp(apiKey) {
             try {
                 genAI = new window.GoogleGenerativeAI(apiKey);
@@ -225,25 +227,52 @@
                 console.error('Initialization Error:', error);
             }
         }
+        
+        function showTypingIndicator() {
+            if (document.getElementById('typing-indicator')) return;
+            const indicator = document.createElement('div');
+            indicator.id = 'typing-indicator';
+            indicator.innerHTML = `<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>`;
+            chatHistory.appendChild(indicator);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
 
-        async function handleFormSubmit(e) {
-            e.preventDefault();
+        function removeTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) { indicator.remove(); }
+        }
+
+        // ▼▼▼ 送信処理のロジックを抜本的に修正 ▼▼▼
+        async function processSubmission() {
+            // isSubmittingフラグで二重送信を完全に防止
+            if (isSubmitting) return;
+
             const message = messageInput.value.trim();
-            if (!message && attachedFiles.length === 0) return;
-            if (submitButton.disabled) return;
-
+            const filesToSend = [...attachedFiles];
+            
+            if (!message && filesToSend.length === 0) return;
+            
+            // 処理開始をマーク
+            isSubmitting = true;
             submitButton.disabled = true;
             submitButton.textContent = '生成中...';
-            
-            const filesToSend = [...attachedFiles];
+
+            // ユーザーの入力を表示
             displayMessage(message, 'user', false, filesToSend);
             
-            attachedFiles = [];
-            renderFilePreviews();
-            messageInput.value = '';
+            // ▼▼▼ UIクリア処理を確実化 ▼▼▼
+            // setTimeoutを使い、現在のイベント処理の後にUIクリアを実行させる
+            setTimeout(() => {
+                messageInput.value = '';
+                attachedFiles = [];
+                renderFilePreviews();
+            }, 0);
+
+            // AIの応答待ちインジケーターを表示
+            showTypingIndicator();
 
             try {
-                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
                 const parts = [];
                 
                 if (filesToSend.length > 0) {
@@ -251,12 +280,12 @@
                     const fileParts = await Promise.all(filePromises);
                     parts.push(...fileParts);
                 }
-
                 parts.push({text: message});
 
                 const result = await model.generateContent({ contents: [{ role: "user", parts }] });
                 const response = await result.response;
                 const text = response.text();
+                
                 displayMessage(text, 'ai');
 
             } catch (error) {
@@ -264,10 +293,19 @@
                 const errorMessage = `エラーが発生しました: ${error.message}`;
                 displayMessage(errorMessage, 'ai', true);
             } finally {
+                // 処理完了をマークし、UIを元に戻す
+                removeTypingIndicator();
                 submitButton.disabled = false;
                 submitButton.textContent = '送信';
+                isSubmitting = false;
                 messageInput.focus();
             }
+        }
+        
+        // --- ファイル処理・メッセージ表示関数（変更なし） ---
+        function addFiles(files) {
+            for (const file of files) { attachedFiles.push(file); }
+            renderFilePreviews();
         }
 
         function renderFilePreviews() {
@@ -275,10 +313,7 @@
             attachedFiles.forEach((file, index) => {
                 const item = document.createElement('div');
                 item.className = 'file-preview-item';
-                item.innerHTML = `
-                    <span>${file.name}</span>
-                    <button class="delete-file-btn" data-index="${index}">&times;</button>
-                `;
+                item.innerHTML = `<span>${file.name}</span><button class="delete-file-btn" data-index="${index}">&times;</button>`;
                 filePreviewContainer.appendChild(item);
             });
 
@@ -305,7 +340,7 @@
         function displayMessage(text, sender, isError = false, files = []) {
             const messageElement = document.createElement('div');
             messageElement.classList.add('message', `${sender}-message`);
-            if (isError) messageElement.classList.add('error-message');
+            if (isError) { messageElement.classList.add('error-message'); }
 
             if (sender === 'user' && files.length > 0) {
                 const attachmentsContainer = document.createElement('div');
@@ -319,20 +354,18 @@
                 messageElement.appendChild(attachmentsContainer);
             }
             
+            if (sender === 'ai') { removeTypingIndicator(); }
+
             const parts = text.split(/(```[\s\S]*?```)/g);
             parts.forEach(part => {
                 if (part.startsWith('```') && part.endsWith('```')) {
                     const codeContent = part.slice(3, -3).trim();
                     const lang = codeContent.split('\n')[0].trim();
                     const code = codeContent.substring(lang.length).trim();
-                    
                     const templateClone = codeBlockTemplate.content.cloneNode(true);
                     const codeElement = templateClone.querySelector('code');
                     codeElement.textContent = code;
-
-                    if (hljs.getLanguage(lang)) {
-                        codeElement.className = `language-${lang}`;
-                    }
+                    if (hljs.getLanguage(lang)) { codeElement.className = `language-${lang}`; }
                     hljs.highlightElement(codeElement);
                     messageElement.appendChild(templateClone);
                 } else if (part.trim()) {
@@ -341,6 +374,8 @@
                     messageElement.appendChild(textNode);
                 }
             });
+            
+            if (typeof MathJax !== 'undefined') { MathJax.typesetPromise([messageElement]); }
 
             const timestamp = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
             const timestampElement = document.createElement('div');

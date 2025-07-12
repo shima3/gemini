@@ -148,8 +148,8 @@
       dropZone.style.background = '#f9f9f9';
       for (const file of e.dataTransfer.files) {
         files.push(file);
-        renderAttachments();
       }
+      renderAttachments();
     });
 
     function renderAttachments() {
@@ -157,7 +157,13 @@
       files.forEach((file, index) => {
         const div = document.createElement('div');
         div.className = 'attachment';
-        div.innerHTML = `<span>${file.name}</span><button onclick="removeAttachment(${index})">×</button>`;
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = file.name;
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('click', () => removeAttachment(index));
+        div.appendChild(nameSpan);
+        div.appendChild(removeBtn);
         attachments.appendChild(div);
       });
     }
@@ -215,15 +221,43 @@
       });
     }
 
+    function escapeHtml(unsafe) {
+      return unsafe.replace(/[&<>"]/g, function (m) {
+        return {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;'
+        }[m];
+      });
+    }
+
     function appendMessage(sender, text, isAI = false) {
       const div = document.createElement('div');
       div.classList.add('message');
       div.classList.add(isAI ? 'ai' : 'user');
       const time = new Date().toLocaleTimeString();
-      let formatted = text.replace(/\n/g, '<br>').replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
-        return `<div class="code">${code}</div>`;
+      const container = document.createElement('div');
+      const title = document.createElement('strong');
+      title.textContent = `[${time}] ${sender}：`;
+      container.appendChild(title);
+      container.appendChild(document.createElement('br'));
+
+      const parts = text.split(/```(?:\w+)?\n([\s\S]*?)```/g);
+      parts.forEach((part, i) => {
+        if (i % 2 === 0) {
+          const span = document.createElement('span');
+          span.innerHTML = escapeHtml(part).replace(/\n/g, '<br>');
+          container.appendChild(span);
+        } else {
+          const pre = document.createElement('div');
+          pre.className = 'code';
+          pre.textContent = part;
+          container.appendChild(pre);
+        }
       });
-      div.innerHTML = `<strong>[${time}] ${sender}:</strong><br>${formatted}`;
+
+      div.appendChild(container);
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }

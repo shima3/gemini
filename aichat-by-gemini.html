@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Chat App (最終修正版)</title>
+    <title>Gemini Chat App (ショートカット変更版)</title>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <!-- Markdown対応機能がないため、以下はコメントアウトまたは削除しても良いですが、将来の拡張のために残しておきます -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"></script>
 
     <style>
         /* CSSは変更ありません */
@@ -99,17 +102,9 @@
             margin: 0 2px;
             animation: typing-blink 1.4s infinite both;
         }
-        .typing-dot:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-        .typing-dot:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-        @keyframes typing-blink {
-            0% { opacity: 0.2; }
-            20% { opacity: 1; }
-            100% { opacity: 0.2; }
-        }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing-blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
     </style>
 </head>
 <body>
@@ -130,7 +125,8 @@
             <form id="chat-form">
                 <div id="file-preview-container"></div>
                 <div id="input-area">
-                    <textarea id="message-input" placeholder="ここにファイルをドラッグ＆ドロップ、またはメッセージを入力... (Shift+Enterで改行)" required rows="1"></textarea>
+                    <!-- ▼▼▼ 変更: プレースホルダーのテキストを更新 ▼▼▼ -->
+                    <textarea id="message-input" placeholder="メッセージを入力... (Ctrl+Enterで送信)" required rows="1"></textarea>
                     <button type="button" id="attach-file-button" title="ファイルを選択">📎</button>
                     <button type="submit" id="submit-button">送信</button>
                 </div>
@@ -150,7 +146,6 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // --- DOM要素の取得など（変更なし） ---
         const apiKeyContainer = document.getElementById('api-key-container');
         const apiKeyInput = document.getElementById('api-key-input');
         const apiKeySubmit = document.getElementById('api-key-submit');
@@ -167,10 +162,9 @@
 
         let genAI;
         let attachedFiles = [];
-        // ▼▼▼ 追加: 送信中の状態を管理するフラグ ▼▼▼
         let isSubmitting = false;
 
-        // --- 初期化処理（変更なし） ---
+        // --- 初期化処理 ---
         const savedApiKey = localStorage.getItem('geminiApiKey');
         if (savedApiKey) { initializeApp(savedApiKey); } else { apiKeyContainer.classList.remove('hidden'); }
         apiKeySubmit.addEventListener('click', () => {
@@ -185,32 +179,29 @@
             }
         });
 
-        // ▼▼▼ イベントリスナーの仕組みを全面的に修正 ▼▼▼
-        
-        // フォームの送信イベントに処理を一本化
+        // --- イベントリスナー ---
         chatForm.addEventListener('submit', (e) => {
             e.preventDefault();
             processSubmission();
         });
 
-        // Enterキー押下時は、標準のフォーム送信リクエストを発火させる
+        // ▼▼▼ 変更: キーボードイベントのリスナーを修正 ▼▼▼
         messageInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                // chatFormのsubmitイベントを発火させる、より信頼性の高い方法
+            // Ctrlキーが押されながらEnterキーが押された場合のみ送信
+            if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault(); // デフォルトの動作（もしあれば）をキャンセル
                 if (!isSubmitting) {
-                    chatForm.requestSubmit();
+                    chatForm.requestSubmit(); // フォームの送信イベントを発火
                 }
             }
+            // Enterキー単独の場合は何もしない（デフォルトの改行が実行される）
         });
         
-        // --- ファイル関連のイベントリスナー（変更なし） ---
         attachFileButton.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => { addFiles(e.target.files); fileInput.value = ''; });
         chatForm.addEventListener('dragover', (e) => { e.preventDefault(); chatForm.classList.add('drag-over'); });
         chatForm.addEventListener('dragleave', (e) => { e.preventDefault(); chatForm.classList.remove('drag-over'); });
         chatForm.addEventListener('drop', (e) => { e.preventDefault(); chatForm.classList.remove('drag-over'); addFiles(e.dataTransfer.files); });
-        
         
         // --- 主要な関数 ---
         function initializeApp(apiKey) {
@@ -228,23 +219,7 @@
             }
         }
         
-        function showTypingIndicator() {
-            if (document.getElementById('typing-indicator')) return;
-            const indicator = document.createElement('div');
-            indicator.id = 'typing-indicator';
-            indicator.innerHTML = `<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>`;
-            chatHistory.appendChild(indicator);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-        }
-
-        function removeTypingIndicator() {
-            const indicator = document.getElementById('typing-indicator');
-            if (indicator) { indicator.remove(); }
-        }
-
-        // ▼▼▼ 送信処理のロジックを抜本的に修正 ▼▼▼
         async function processSubmission() {
-            // isSubmittingフラグで二重送信を完全に防止
             if (isSubmitting) return;
 
             const message = messageInput.value.trim();
@@ -252,27 +227,23 @@
             
             if (!message && filesToSend.length === 0) return;
             
-            // 処理開始をマーク
             isSubmitting = true;
             submitButton.disabled = true;
             submitButton.textContent = '生成中...';
 
-            // ユーザーの入力を表示
             displayMessage(message, 'user', false, filesToSend);
             
-            // ▼▼▼ UIクリア処理を確実化 ▼▼▼
-            // setTimeoutを使い、現在のイベント処理の後にUIクリアを実行させる
             setTimeout(() => {
                 messageInput.value = '';
                 attachedFiles = [];
                 renderFilePreviews();
             }, 0);
 
-            // AIの応答待ちインジケーターを表示
             showTypingIndicator();
 
             try {
-                const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+                // ▼▼▼ 修正: 実在するモデル名に変更 ▼▼▼
+                const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" }); 
                 const parts = [];
                 
                 if (filesToSend.length > 0) {
@@ -293,7 +264,6 @@
                 const errorMessage = `エラーが発生しました: ${error.message}`;
                 displayMessage(errorMessage, 'ai', true);
             } finally {
-                // 処理完了をマークし、UIを元に戻す
                 removeTypingIndicator();
                 submitButton.disabled = false;
                 submitButton.textContent = '送信';
@@ -302,7 +272,20 @@
             }
         }
         
-        // --- ファイル処理・メッセージ表示関数（変更なし） ---
+        function showTypingIndicator() {
+            if (document.getElementById('typing-indicator')) return;
+            const indicator = document.createElement('div');
+            indicator.id = 'typing-indicator';
+            indicator.innerHTML = `<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>`;
+            chatHistory.appendChild(indicator);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        function removeTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) { indicator.remove(); }
+        }
+        
         function addFiles(files) {
             for (const file of files) { attachedFiles.push(file); }
             renderFilePreviews();
@@ -338,6 +321,8 @@
         }
 
         function displayMessage(text, sender, isError = false, files = []) {
+            if (sender === 'ai') { removeTypingIndicator(); }
+
             const messageElement = document.createElement('div');
             messageElement.classList.add('message', `${sender}-message`);
             if (isError) { messageElement.classList.add('error-message'); }
@@ -354,8 +339,6 @@
                 messageElement.appendChild(attachmentsContainer);
             }
             
-            if (sender === 'ai') { removeTypingIndicator(); }
-
             const parts = text.split(/(```[\s\S]*?```)/g);
             parts.forEach(part => {
                 if (part.startsWith('```') && part.endsWith('```')) {
@@ -375,7 +358,9 @@
                 }
             });
             
-            if (typeof MathJax !== 'undefined') { MathJax.typesetPromise([messageElement]); }
+            if (typeof MathJax !== 'undefined') {
+                MathJax.typesetPromise([messageElement]);
+            }
 
             const timestamp = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
             const timestampElement = document.createElement('div');

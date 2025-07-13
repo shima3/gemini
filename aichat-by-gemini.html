@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <title>Gemini API Chat App</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- highlight.js for syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <style>
         :root {
             --primary-color: #4a90e2;
@@ -14,6 +17,8 @@
             --text-color: #333;
             --border-color: #e0e0e0;
             --error-color: #d9534f;
+            --code-bg-color: #282c34;
+            --code-header-bg: #3a404a;
             --font-family: 'Helvetica Neue', Arial, sans-serif;
         }
         
@@ -51,236 +56,54 @@
             align-items: center;
         }
 
-        header h1 {
-            margin: 0;
-            font-size: 1.2em;
-        }
+        header h1 { margin: 0; font-size: 1.2em; }
+        #settings-toggle { background: none; border: 1px solid white; color: white; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8em; }
+        #settings-container { padding: 20px; border-bottom: 1px solid var(--border-color); }
+        #settings-container.hidden { display: none; }
+        .settings-grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
+        @media (min-width: 600px) { .settings-grid { grid-template-columns: 1fr 1fr; gap: 20px; } }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label { margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
+        .form-group input { padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; font-size: 1em; }
 
-        #settings-toggle {
-            background: none;
-            border: 1px solid white;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.8em;
-        }
+        #chat-container { display: flex; flex-direction: column; flex-grow: 1; height: 70vh; }
+        #chat-history { flex-grow: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        .message { padding: 10px 15px; border-radius: 18px; max-width: 90%; display: flex; flex-direction: column; }
+        .message-content { white-space: pre-wrap; word-break: break-word; }
+        .message-content img { max-width: 100%; border-radius: 8px; margin-top: 8px; }
+        .message-timestamp { font-size: 0.75em; color: #888; margin-top: 5px; text-align: right; }
+        .user-message { background-color: var(--user-message-bg); align-self: flex-end; border-bottom-right-radius: 4px; }
+        .ai-message { background-color: var(--ai-message-bg); align-self: flex-start; border-bottom-left-radius: 4px; max-width: 100%; }
 
-        #settings-container {
-            padding: 20px;
-            border-bottom: 1px solid var(--border-color);
-        }
+        /* Code Block Styles */
+        .code-block-wrapper { margin: 1em 0; border-radius: 8px; overflow: hidden; }
+        .code-header { display: flex; justify-content: space-between; align-items: center; background-color: var(--code-header-bg); padding: 5px 10px; color: #ccc; font-size: 0.8em; }
+        .code-header .language-name { font-weight: bold; }
+        .code-header .code-actions button { background: none; border: 1px solid #777; color: #ccc; padding: 3px 8px; border-radius: 4px; cursor: pointer; margin-left: 8px; font-size: 0.9em; }
+        .code-header .code-actions button:hover { background-color: #555; }
+        pre, code { margin: 0; font-family: 'Courier New', Courier, monospace; }
+        .ai-message pre { background-color: var(--code-bg-color); padding: 15px; overflow-x: auto; }
 
-        #settings-container.hidden {
-            display: none;
-        }
+        .loading-indicator { align-self: flex-start; display: flex; align-items: center; gap: 8px; padding: 0 20px 10px; }
+        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid var(--primary-color); border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        .settings-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 15px;
-        }
-
-        @media (min-width: 600px) {
-            .settings-grid {
-                grid-template-columns: 1fr 1fr;
-                gap: 20px;
-            }
-        }
-        
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .form-group label {
-            margin-bottom: 5px;
-            font-weight: bold;
-            font-size: 0.9em;
-        }
-
-        .form-group input {
-            padding: 10px;
-            border: 1px solid var(--border-color);
-            border-radius: 5px;
-            font-size: 1em;
-        }
-
-        #chat-container {
-            display: flex;
-            flex-direction: column;
-            flex-grow: 1;
-            height: 65vh;
-        }
-
-        #chat-history {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .message {
-            padding: 10px 15px;
-            border-radius: 18px;
-            max-width: 80%;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .message-content {
-            white-space: pre-wrap;
-        }
-
-        .message-content img {
-            max-width: 100%;
-            border-radius: 8px;
-            margin-top: 8px;
-        }
-        
-        .message-timestamp {
-            font-size: 0.75em;
-            color: #888;
-            margin-top: 5px;
-            text-align: right;
-        }
-
-        .user-message {
-            background-color: var(--user-message-bg);
-            align-self: flex-end;
-            border-bottom-right-radius: 4px;
-        }
-
-        .ai-message {
-            background-color: var(--ai-message-bg);
-            align-self: flex-start;
-            border-bottom-left-radius: 4px;
-        }
-
-        .loading-indicator {
-            align-self: flex-start;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 0 20px 10px;
-        }
-
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid var(--primary-color);
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        #chat-form-container {
-            padding: 10px 20px 20px 20px;
-            border-top: 1px solid var(--border-color);
-        }
-
-        #input-wrapper {
-            display: flex;
-            flex-direction: column;
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 5px;
-        }
-
-        #input-wrapper.drag-over {
-            border-color: var(--primary-color);
-            border-style: dashed;
-        }
-
-        #file-preview {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            padding: 0 10px 8px 10px;
-        }
-
-        .file-item {
-            background-color: #f0f0f0;
-            padding: 5px 8px;
-            border-radius: 12px;
-            font-size: 0.8em;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        .file-item .remove-file {
-            cursor: pointer;
-            font-weight: bold;
-            color: #999;
-        }
-
-        #form-bottom-row {
-            display: flex;
-            gap: 10px;
-            align-items: flex-end;
-        }
-        
-        #file-input-label {
-            padding: 8px;
-            cursor: pointer;
-        }
-        
-        #file-input-label svg {
-            width: 24px;
-            height: 24px;
-            fill: #555;
-        }
-
-        #message-input {
-            flex-grow: 1;
-            padding: 10px;
-            border: none;
-            resize: none;
-            font-size: 1em;
-            font-family: var(--font-family);
-            height: 24px;
-            max-height: 100px;
-            overflow-y: auto;
-            background: transparent;
-        }
-        #message-input:focus {
-            outline: none;
-        }
-
-        #send-button {
-            padding: 0 20px;
-            border: none;
-            background-color: var(--primary-color);
-            color: white;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 1em;
-            align-self: flex-end;
-            margin: 5px;
-            height: 40px;
-        }
-
-        #send-button:disabled {
-            background-color: #a0a0a0;
-            cursor: not-allowed;
-        }
-
-        #error-message {
-            color: var(--error-color);
-            padding: 10px 20px;
-            text-align: center;
-            font-weight: bold;
-            display: none;
-        }
-
+        #chat-form-container { padding: 10px 20px 20px 20px; border-top: 1px solid var(--border-color); }
+        #input-wrapper { display: flex; flex-direction: column; border: 1px solid var(--border-color); border-radius: 20px; padding: 5px; }
+        #input-wrapper.drag-over { border-color: var(--primary-color); border-style: dashed; }
+        #file-preview { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 10px 8px 10px; }
+        .file-item { background-color: #f0f0f0; padding: 5px 8px; border-radius: 12px; font-size: 0.8em; display: flex; align-items: center; gap: 5px; }
+        .file-item .remove-file { cursor: pointer; font-weight: bold; color: #999; }
+        #form-bottom-row { display: flex; gap: 10px; align-items: flex-end; }
+        #file-input-label { padding: 8px; cursor: pointer; }
+        #file-input-label svg { width: 24px; height: 24px; fill: #555; }
+        #message-input { flex-grow: 1; padding: 10px; border: none; resize: none; font-size: 1em; height: 24px; max-height: 100px; overflow-y: auto; background: transparent; }
+        #message-input:focus { outline: none; }
+        #send-button { padding: 0 20px; border: none; background-color: var(--primary-color); color: white; border-radius: 20px; cursor: pointer; font-size: 1em; align-self: flex-end; margin: 5px; height: 40px; }
+        #send-button:disabled { background-color: #a0a0a0; cursor: not-allowed; }
+        #error-message { color: var(--error-color); padding: 10px 20px; text-align: center; font-weight: bold; display: none; }
+        #toast-notification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background-color: #28a745; color: white; padding: 10px 20px; border-radius: 5px; z-index: 1000; opacity: 0; transition: opacity 0.5s; font-size: 0.9em; }
+        #toast-notification.show { opacity: 1; }
     </style>
 </head>
 <body>
@@ -298,7 +121,7 @@
                     <input type="password" id="api-key" placeholder="Google AI Studioで取得したキー">
                 </div>
                 <div class="form-group">
-                    <label for="model-input">モデル (Vision対応モデルを推奨)</label>
+                    <label for="model-input">モデル</label>
                     <input type="text" id="model-input" placeholder="例: gemini-1.5-pro-latest">
                 </div>
             </div>
@@ -308,10 +131,7 @@
 
         <div id="chat-container">
             <div id="chat-history"></div>
-            <div id="loading-indicator" class="loading-indicator" style="display: none;">
-                <div class="spinner"></div>
-                <span>AIが応答を生成中...</span>
-            </div>
+            <div id="loading-indicator" class="loading-indicator" style="display: none;"></div>
             <form id="chat-form">
                 <div id="chat-form-container">
                     <div id="input-wrapper">
@@ -329,6 +149,7 @@
             </form>
         </div>
     </div>
+    <div id="toast-notification">コピーしました！</div>
 
     <script type="module">
         const { GoogleGenerativeAI } = await import("https://unpkg.com/@google/generative-ai/dist/index.mjs");
@@ -347,6 +168,7 @@
         const loadingIndicator = document.getElementById('loading-indicator');
         const fileInput = document.getElementById('file-input');
         const filePreview = document.getElementById('file-preview');
+        const toastNotification = document.getElementById('toast-notification');
 
         let genAI;
         let chat;
@@ -356,42 +178,28 @@
         function initializeApp() {
             const savedApiKey = localStorage.getItem('geminiApiKey');
             const savedModel = localStorage.getItem('geminiModel');
-
-            if (savedApiKey) {
-                apiKeyInput.value = savedApiKey;
-            }
+            if (savedApiKey) apiKeyInput.value = savedApiKey;
             modelInput.value = savedModel || 'gemini-1.5-pro-latest'; 
-
-            if (apiKeyInput.value) {
-                setupChat();
-            }
+            if (apiKeyInput.value) setupChat();
+            
+            loadingIndicator.innerHTML = `<div class="spinner"></div><span>AIが応答を生成中...</span>`;
 
             settingsToggleBtn.addEventListener('click', () => settingsContainer.classList.toggle('hidden'));
             apiKeyInput.addEventListener('change', saveAndReinitializeChat);
             modelInput.addEventListener('change', saveAndReinitializeChat);
             chatForm.addEventListener('submit', handleChatSubmit);
             messageInput.addEventListener('input', autoResizeTextarea);
-            messageInput.addEventListener('keydown', handleKeyDown); // ★修正点★
+            messageInput.addEventListener('keydown', handleKeyDown);
             fileInput.addEventListener('change', handleFileSelect);
-
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                inputWrapper.addEventListener(eventName, preventDefaults, false);
-            });
-            ['dragenter', 'dragover'].forEach(eventName => {
-                inputWrapper.addEventListener(eventName, () => inputWrapper.classList.add('drag-over'), false);
-            });
-            ['dragleave', 'drop'].forEach(eventName => {
-                inputWrapper.addEventListener(eventName, () => inputWrapper.classList.remove('drag-over'), false);
-            });
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => inputWrapper.addEventListener(eName, preventDefaults, false));
+            ['dragenter', 'dragover'].forEach(eName => inputWrapper.addEventListener(eName, () => inputWrapper.classList.add('drag-over'), false));
+            ['dragleave', 'drop'].forEach(eName => inputWrapper.addEventListener(eName, () => inputWrapper.classList.remove('drag-over'), false));
             inputWrapper.addEventListener('drop', handleFileDrop, false);
         }
         
         function saveAndReinitializeChat() {
             const apiKey = apiKeyInput.value.trim();
-            if (!apiKey) {
-                displayError("APIキーを入力してください。");
-                return;
-            }
+            if (!apiKey) return displayError("APIキーを入力してください。");
             localStorage.setItem('geminiApiKey', apiKey);
             localStorage.setItem('geminiModel', modelInput.value.trim());
             clearError();
@@ -400,31 +208,16 @@
         
         function setupChat() {
             const apiKey = apiKeyInput.value.trim();
-            if (!apiKey) {
-                chatContainer.style.display = 'none';
-                displayError("APIキーが設定されていません。上の「設定」からキーを入力してください。");
-                return;
-            }
-            
+            if (!apiKey) return displayError("APIキーが設定されていません。");
             try {
                 genAI = new GoogleGenerativeAI(apiKey);
                 const modelName = modelInput.value.trim();
-                if (!modelName) {
-                    displayError("モデル名を入力してください。");
-                    return;
-                }
+                if (!modelName) return displayError("モデル名を入力してください。");
                 const generativeModel = genAI.getGenerativeModel({ model: modelName });
-                
-                chat = generativeModel.startChat({
-                    history: conversationHistory,
-                    generationConfig: { maxOutputTokens: 4096 }
-                });
-                
+                chat = generativeModel.startChat({ history: conversationHistory, generationConfig: { maxOutputTokens: 8192 } });
                 chatContainer.style.display = 'flex';
                 clearError();
-            } catch (error) {
-                displayError(`チャットの初期化に失敗しました: ${error.message}`);
-            }
+            } catch (error) { displayError(`チャットの初期化に失敗: ${error.message}`); }
         }
 
         async function handleChatSubmit(e) {
@@ -440,27 +233,18 @@
 
             try {
                 const fileParts = await Promise.all(filesToSend.map(fileToGenerativePart));
-                
-                const parts = [...fileParts];
-                if (userInput) {
-                    parts.push({ text: userInput });
-                }
-
+                const parts = [...fileParts, ...(userInput ? [{ text: userInput }] : [])];
                 conversationHistory.push({ role: "user", parts });
-
                 const result = await chat.sendMessage(parts);
                 const response = await result.response;
                 const text = response.text();
-
                 conversationHistory.push({ role: "model", parts: [{ text }] });
                 addMessageToDisplay('model', text);
                 clearError();
             } catch (error) {
                 console.error('API Error:', error);
-                const friendlyMessage = error.message.includes("API key not valid") 
-                    ? "APIキーが無効です。設定を確認してください。"
-                    : `APIリクエストでエラーが発生しました: ${error.message}`;
-                displayError(friendlyMessage);
+                const msg = error.message.includes("API key not valid") ? "APIキーが無効です。" : `APIエラー: ${error.message}`;
+                displayError(msg);
                 conversationHistory.pop();
             } finally {
                 sendButton.disabled = false;
@@ -475,15 +259,7 @@
         function fileToGenerativePart(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onloadend = () => {
-                    const base64Data = reader.result.split(',')[1];
-                    resolve({
-                        inlineData: {
-                            data: base64Data,
-                            mimeType: file.type
-                        }
-                    });
-                };
+                reader.onloadend = () => resolve({ inlineData: { data: reader.result.split(',')[1], mimeType: file.type } });
                 reader.onerror = reject;
                 reader.readAsDataURL(file);
             });
@@ -492,25 +268,23 @@
         function addMessageToDisplay(sender, text, files = []) {
             const messageEl = document.createElement('div');
             messageEl.classList.add('message', sender === 'user' ? 'user-message' : 'ai-message');
-            
             const contentEl = document.createElement('div');
             contentEl.classList.add('message-content');
             
-            if (text) {
-                const textNode = document.createElement('div');
-                textNode.textContent = text;
-                contentEl.appendChild(textNode);
-            }
-
-            if (files.length > 0) {
-                files.forEach(file => {
-                    if (file.type.startsWith('image/')) {
-                        const img = document.createElement('img');
-                        img.src = URL.createObjectURL(file);
-                        img.onload = () => URL.revokeObjectURL(img.src);
-                        contentEl.appendChild(img);
-                    }
-                });
+            if (sender === 'model') {
+                renderFormattedContent(contentEl, text);
+            } else {
+                if (text) contentEl.appendChild(document.createTextNode(text));
+                if (files.length > 0) {
+                    files.forEach(file => {
+                        if (file.type.startsWith('image/')) {
+                            const img = document.createElement('img');
+                            img.src = URL.createObjectURL(file);
+                            img.onload = () => URL.revokeObjectURL(img.src);
+                            contentEl.appendChild(img);
+                        }
+                    });
+                }
             }
             
             const timestampEl = document.createElement('div');
@@ -519,24 +293,100 @@
             
             messageEl.appendChild(contentEl);
             messageEl.appendChild(timestampEl);
-            
             chatHistory.appendChild(messageEl);
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
 
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
+        function renderFormattedContent(container, text) {
+            // ★★★ 修正点 ★★★
+            // 行頭と行末の ``` にのみマッチするように正規表現を修正
+            const codeBlockRegex = /^```(\w*)\n([\s\S]*?)\n```$/gm;
+            let lastIndex = 0;
+            let match;
+
+            while ((match = codeBlockRegex.exec(text)) !== null) {
+                // コードブロックの前のテキスト部分を追加
+                if (match.index > lastIndex) {
+                    container.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+                }
+                const language = match[1] || 'plaintext';
+                const code = match[2];
+                
+                const wrapper = document.createElement('div');
+                wrapper.className = 'code-block-wrapper';
+                const header = document.createElement('div');
+                header.className = 'code-header';
+                const langName = document.createElement('span');
+                langName.className = 'language-name';
+                langName.textContent = language;
+                const actions = document.createElement('div');
+                actions.className = 'code-actions';
+
+                const copyBtn = document.createElement('button');
+                copyBtn.textContent = 'Copy';
+                copyBtn.onclick = () => handleCopyClick(code);
+                const downloadBtn = document.createElement('button');
+                downloadBtn.textContent = 'Download';
+                downloadBtn.onclick = () => handleDownloadClick(code, language);
+
+                actions.appendChild(copyBtn);
+                actions.appendChild(downloadBtn);
+                header.appendChild(langName);
+                header.appendChild(actions);
+                wrapper.appendChild(header);
+
+                const pre = document.createElement('pre');
+                const codeEl = document.createElement('code');
+                codeEl.className = `language-${language}`;
+                // textContent を使うことで、コード内の特殊文字 (&, <, >) が自動的にエスケープされる
+                codeEl.textContent = code;
+                pre.appendChild(codeEl);
+                wrapper.appendChild(pre);
+                container.appendChild(wrapper);
+
+                // ハイライトを適用
+                hljs.highlightElement(codeEl);
+                lastIndex = codeBlockRegex.lastIndex;
+            }
+            // 最後のコードブロックの後のテキスト部分を追加
+            if (lastIndex < text.length) {
+                container.appendChild(document.createTextNode(text.substring(lastIndex)));
+            }
         }
 
-        function handleFileDrop({ dataTransfer }) {
-            addFiles(dataTransfer.files);
+        function handleCopyClick(code) {
+            navigator.clipboard.writeText(code).then(() => {
+                showToast("コピーしました！");
+            });
         }
         
-        function handleFileSelect(e) {
-            addFiles(e.target.files);
-            e.target.value = '';
+        function handleDownloadClick(code, language) {
+            const extension = getCodeExtension(language);
+            const blob = new Blob([code], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `code-${Date.now()}.${extension}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
+
+        function getCodeExtension(language) {
+            const langMap = { 'javascript': 'js', 'python': 'py', 'html': 'html', 'css': 'css', 'java': 'java', 'csharp': 'cs', 'cpp': 'cpp', 'ruby': 'rb', 'go': 'go', 'shell': 'sh', 'bash': 'sh', 'json': 'json', 'sql': 'sql', 'typescript': 'ts', 'xml': 'xml', 'yaml': 'yaml' };
+            return langMap[language.toLowerCase()] || 'txt';
+        }
+        
+        function showToast(message) {
+            toastNotification.textContent = message;
+            toastNotification.classList.add('show');
+            setTimeout(() => { toastNotification.classList.remove('show'); }, 2000);
+        }
+
+        function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+        function handleFileDrop({ dataTransfer }) { addFiles(dataTransfer.files); }
+        function handleFileSelect(e) { addFiles(e.target.files); e.target.value = ''; }
 
         function addFiles(files) {
             for (const file of files) {
@@ -552,47 +402,22 @@
             attachedFiles.forEach((file, index) => {
                 const fileItem = document.createElement('div');
                 fileItem.className = 'file-item';
-                
                 const fileName = document.createElement('span');
                 fileName.textContent = file.name;
-                
                 const removeBtn = document.createElement('span');
                 removeBtn.className = 'remove-file';
                 removeBtn.textContent = '×';
-                removeBtn.onclick = () => {
-                    attachedFiles.splice(index, 1);
-                    renderFilePreview();
-                };
-                
+                removeBtn.onclick = () => { attachedFiles.splice(index, 1); renderFilePreview(); };
                 fileItem.appendChild(fileName);
                 fileItem.appendChild(removeBtn);
                 filePreview.appendChild(fileItem);
             });
         }
 
-        function displayError(message) {
-            errorMessageDiv.textContent = message;
-            errorMessageDiv.style.display = 'block';
-        }
-
-        function clearError() {
-            errorMessageDiv.textContent = '';
-            errorMessageDiv.style.display = 'none';
-        }
-
-        function autoResizeTextarea() {
-            messageInput.style.height = 'auto';
-            messageInput.style.height = `${messageInput.scrollHeight}px`;
-        }
-        
-        // ★★★ 修正点 ★★★
-        // Ctrl+Enter (または Cmd+Enter) で送信、Enterで改行
-        function handleKeyDown(e) {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault(); // デフォルトの改行動作をキャンセル
-                chatForm.requestSubmit();
-            }
-        }
+        function displayError(message) { errorMessageDiv.textContent = message; errorMessageDiv.style.display = 'block'; }
+        function clearError() { errorMessageDiv.textContent = ''; errorMessageDiv.style.display = 'none'; }
+        function autoResizeTextarea() { messageInput.style.height = 'auto'; messageInput.style.height = `${messageInput.scrollHeight}px`; }
+        function handleKeyDown(e) { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); chatForm.requestSubmit(); } }
 
         initializeApp();
     </script>

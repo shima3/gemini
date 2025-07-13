@@ -203,6 +203,8 @@
             localStorage.setItem('geminiApiKey', apiKey);
             localStorage.setItem('geminiModel', modelInput.value.trim());
             clearError();
+            // 会話をリセットしてチャットを再初期化
+            conversationHistory = [];
             setupChat();
         }
         
@@ -213,11 +215,22 @@
                 genAI = new GoogleGenerativeAI(apiKey);
                 const modelName = modelInput.value.trim();
                 if (!modelName) return displayError("モデル名を入力してください。");
-                const generativeModel = genAI.getGenerativeModel({ model: modelName });
-                chat = generativeModel.startChat({ history: conversationHistory, generationConfig: { maxOutputTokens: 8192 } });
+
+                const model = genAI.getGenerativeModel({
+                    model: modelName,
+                    systemInstruction: "あなたはWebデザインとコーディングを支援するAIです。ユーザーから図形やグラフの描画を指示された場合は、必ずSVGコードを生成し、そのコードブロックの言語指定を ```svg として応答してください。他の形式（xmlなど）は使用しないでください。",
+                });
+                
+                chat = model.startChat({ 
+                    history: conversationHistory, 
+                    generationConfig: { maxOutputTokens: 8192 } 
+                });
+
                 chatContainer.style.display = 'flex';
                 clearError();
-            } catch (error) { displayError(`チャットの初期化に失敗: ${error.message}`); }
+            } catch (error) { 
+                displayError(`チャットの初期化に失敗: ${error.message}`); 
+            }
         }
 
         async function handleChatSubmit(e) {
@@ -234,18 +247,25 @@
             try {
                 const fileParts = await Promise.all(filesToSend.map(fileToGenerativePart));
                 const parts = [...fileParts, ...(userInput ? [{ text: userInput }] : [])];
+                
+                // 履歴を更新してからAPIに送信
                 conversationHistory.push({ role: "user", parts });
+                
                 const result = await chat.sendMessage(parts);
                 const response = await result.response;
                 const text = response.text();
+
+                // 応答を履歴に追加
                 conversationHistory.push({ role: "model", parts: [{ text }] });
+                
                 addMessageToDisplay('model', text);
                 clearError();
             } catch (error) {
                 console.error('API Error:', error);
                 const msg = error.message.includes("API key not valid") ? "APIキーが無効です。" : `APIエラー: ${error.message}`;
                 displayError(msg);
-                conversationHistory.pop();
+                // エラーが発生した場合、最後に追加したユーザーのメッセージを履歴から削除
+                conversationHistory.pop(); 
             } finally {
                 sendButton.disabled = false;
                 loadingIndicator.style.display = 'none';
@@ -298,60 +318,90 @@
         }
 
         function renderFormattedContent(container, text) {
-            // ★★★ 修正点 ★★★
-            // 行頭と行末の ``` にのみマッチするように正規表現を修正
-            const codeBlockRegex = /^```(\w*)\n([\s\S]*?)\n```$/gm;
+            const blockRegex = /```(\w*)\n([\s\S]*?)\n```/g;
             let lastIndex = 0;
             let match;
 
-            while ((match = codeBlockRegex.exec(text)) !== null) {
-                // コードブロックの前のテキスト部分を追加
+            while ((match = blockRegex.exec(text)) !== null) {
                 if (match.index > lastIndex) {
                     container.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
                 }
-                const language = match[1] || 'plaintext';
+
+                const language = (match[1] || 'plaintext').toLowerCase();
                 const code = match[2];
                 
-                const wrapper = document.createElement('div');
-                wrapper.className = 'code-block-wrapper';
-                const header = document.createElement('div');
-                header.className = 'code-header';
-                const langName = document.createElement('span');
-                langName.className = 'language-name';
-                langName.textContent = language;
-                const actions = document.createElement('div');
-                actions.className = 'code-actions';
+                const isSvg = language === 'svg' || 
+                              (language === 'xml' && code.trim().startsWith('<svg')) ||
+                              (language === 'plaintext' && code.trim().startsWith('<svg'));
 
-                const copyBtn = document.createElement('button');
-                copyBtn.textContent = 'Copy';
-                copyBtn.onclick = () => handleCopyClick(code);
-                const downloadBtn = document.createElement('button');
-                downloadBtn.textContent = 'Download';
-                downloadBtn.onclick = () => handleDownloadClick(code, language);
+                if (isSvg) {
+                    const svgContainer = document.createElement('div');
+                    svgContainer.innerHTML = code;
+                    
+                    const svgElement = svgContainer.querySelector('svg');
+                    if (svgElement) {
+                        svgElement.style.maxWidth = '100%';
+                        svgElement.style.height = 'auto';
+                        svgElement.style.display = 'block';
+                        
+                        svgContainer.style.background = '#ffffff';
+                        svgContainer.style.border = '1px solid var(--border-color)';
+                        svgContainer.style.borderRadius = '8px';
+                        svgContainer.style.padding = '10px';
+                        svgContainer.style.margin = '1em 0';
+                        container.appendChild(svgContainer);
+                    } else {
+                        renderAsCodeBlock(container, code, 'xml');
+                    }
+                } else {
+                    renderAsCodeBlock(container, code, language);
+                }
 
-                actions.appendChild(copyBtn);
-                actions.appendChild(downloadBtn);
-                header.appendChild(langName);
-                header.appendChild(actions);
-                wrapper.appendChild(header);
-
-                const pre = document.createElement('pre');
-                const codeEl = document.createElement('code');
-                codeEl.className = `language-${language}`;
-                // textContent を使うことで、コード内の特殊文字 (&, <, >) が自動的にエスケープされる
-                codeEl.textContent = code;
-                pre.appendChild(codeEl);
-                wrapper.appendChild(pre);
-                container.appendChild(wrapper);
-
-                // ハイライトを適用
-                hljs.highlightElement(codeEl);
-                lastIndex = codeBlockRegex.lastIndex;
+                lastIndex = blockRegex.lastIndex;
             }
-            // 最後のコードブロックの後のテキスト部分を追加
+
             if (lastIndex < text.length) {
                 container.appendChild(document.createTextNode(text.substring(lastIndex)));
             }
+        }
+
+        function renderAsCodeBlock(container, code, language) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'code-block-wrapper';
+            
+            const header = document.createElement('div');
+            header.className = 'code-header';
+            
+            const langName = document.createElement('span');
+            langName.className = 'language-name';
+            langName.textContent = language === 'plaintext' ? 'text' : language;
+            
+            const actions = document.createElement('div');
+            actions.className = 'code-actions';
+
+            const copyBtn = document.createElement('button');
+            copyBtn.textContent = 'Copy';
+            copyBtn.onclick = () => handleCopyClick(code);
+            
+            const downloadBtn = document.createElement('button');
+            downloadBtn.textContent = 'Download';
+            downloadBtn.onclick = () => handleDownloadClick(code, language);
+
+            actions.appendChild(copyBtn);
+            actions.appendChild(downloadBtn);
+            header.appendChild(langName);
+            header.appendChild(actions);
+            wrapper.appendChild(header);
+
+            const pre = document.createElement('pre');
+            const codeEl = document.createElement('code');
+            codeEl.className = `language-${language}`;
+            codeEl.textContent = code;
+            pre.appendChild(codeEl);
+            wrapper.appendChild(pre);
+            container.appendChild(wrapper);
+
+            hljs.highlightElement(codeEl);
         }
 
         function handleCopyClick(code) {
@@ -374,7 +424,7 @@
         }
 
         function getCodeExtension(language) {
-            const langMap = { 'javascript': 'js', 'python': 'py', 'html': 'html', 'css': 'css', 'java': 'java', 'csharp': 'cs', 'cpp': 'cpp', 'ruby': 'rb', 'go': 'go', 'shell': 'sh', 'bash': 'sh', 'json': 'json', 'sql': 'sql', 'typescript': 'ts', 'xml': 'xml', 'yaml': 'yaml' };
+            const langMap = { 'javascript': 'js', 'python': 'py', 'html': 'html', 'css': 'css', 'java': 'java', 'csharp': 'cs', 'cpp': 'cpp', 'ruby': 'rb', 'go': 'go', 'shell': 'sh', 'bash': 'sh', 'json': 'json', 'sql': 'sql', 'typescript': 'ts', 'xml': 'xml', 'yaml': 'yaml', 'svg': 'svg' };
             return langMap[language.toLowerCase()] || 'txt';
         }
         

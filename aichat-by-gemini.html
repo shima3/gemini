@@ -7,6 +7,25 @@
     <!-- highlight.js for syntax highlighting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- MathJax for LaTeX rendering -->
+    <script>
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+      },
+      svg: {
+        fontCache: 'global'
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    };
+    </script>
+    <script type="text/javascript" id="MathJax-script" async
+      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+    </script>
     <style>
         :root {
             --primary-color: #4a90e2;
@@ -74,6 +93,9 @@
         .message-timestamp { font-size: 0.75em; color: #888; margin-top: 5px; text-align: right; }
         .user-message { background-color: var(--user-message-bg); align-self: flex-end; border-bottom-right-radius: 4px; }
         .ai-message { background-color: var(--ai-message-bg); align-self: flex-start; border-bottom-left-radius: 4px; max-width: 100%; }
+        
+        /* MathJax styles */
+        mjx-container { text-align: left !important; }
 
         /* Code Block Styles */
         .code-block-wrapper { margin: 1em 0; border-radius: 8px; overflow: hidden; }
@@ -203,7 +225,6 @@
             localStorage.setItem('geminiApiKey', apiKey);
             localStorage.setItem('geminiModel', modelInput.value.trim());
             clearError();
-            // 会話をリセットしてチャットを再初期化
             conversationHistory = [];
             setupChat();
         }
@@ -218,7 +239,7 @@
 
                 const model = genAI.getGenerativeModel({
                     model: modelName,
-                    systemInstruction: "あなたはWebデザインとコーディングを支援するAIです。ユーザーから図形やグラフの描画を指示された場合は、必ずSVGコードを生成し、そのコードブロックの言語指定を ```svg として応答してください。他の形式（xmlなど）は使用しないでください。",
+                    systemInstruction: "あなたはWebデザインとコーディングを支援するAIです。ユーザーから図形やグラフの描画を指示された場合は、必ずSVGコードを生成し、そのコードブロックの言語指定を ```svg として応答してください。他の形式（xmlなど）は使用しないでください。また、数式を記述する際は、必ずLaTeX形式（インラインは`$...$`、ブロックは`$$...$$`）を使用してください。",
                 });
                 
                 chat = model.startChat({ 
@@ -248,14 +269,12 @@
                 const fileParts = await Promise.all(filesToSend.map(fileToGenerativePart));
                 const parts = [...fileParts, ...(userInput ? [{ text: userInput }] : [])];
                 
-                // 履歴を更新してからAPIに送信
                 conversationHistory.push({ role: "user", parts });
                 
                 const result = await chat.sendMessage(parts);
                 const response = await result.response;
                 const text = response.text();
 
-                // 応答を履歴に追加
                 conversationHistory.push({ role: "model", parts: [{ text }] });
                 
                 addMessageToDisplay('model', text);
@@ -264,7 +283,6 @@
                 console.error('API Error:', error);
                 const msg = error.message.includes("API key not valid") ? "APIキーが無効です。" : `APIエラー: ${error.message}`;
                 displayError(msg);
-                // エラーが発生した場合、最後に追加したユーザーのメッセージを履歴から削除
                 conversationHistory.pop(); 
             } finally {
                 sendButton.disabled = false;
@@ -314,7 +332,22 @@
             messageEl.appendChild(contentEl);
             messageEl.appendChild(timestampEl);
             chatHistory.appendChild(messageEl);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
+
+            if (sender === 'model' && typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
+                // DOMへの追加を確実にするためにマイクロタスクで実行
+                Promise.resolve().then(() => {
+                    // contentEl 内の数式をレンダリング
+                    return MathJax.typesetPromise([contentEl]);
+                }).catch((err) => {
+                    console.error('MathJax typesetting error:', err);
+                }).finally(() => {
+                    // MathJaxのレンダリング後（成功・失敗問わず）にスクロール
+                    chatHistory.scrollTop = chatHistory.scrollHeight;
+                });
+            } else {
+                // 数式がない場合は即座にスクロール
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            }
         }
 
         function renderFormattedContent(container, text) {
@@ -324,6 +357,7 @@
 
             while ((match = blockRegex.exec(text)) !== null) {
                 if (match.index > lastIndex) {
+                    // コードブロックの前のテキストをそのまま追加
                     container.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
                 }
 
@@ -361,6 +395,7 @@
             }
 
             if (lastIndex < text.length) {
+                 // 最後のコードブロックの後ろのテキストをそのまま追加
                 container.appendChild(document.createTextNode(text.substring(lastIndex)));
             }
         }

@@ -169,7 +169,7 @@
         .file-item { background-color: #f0f0f0; padding: 5px 8px; border-radius: 12px; font-size: 0.8em; display: flex; align-items: center; gap: 5px; }
         .file-item .remove-file { cursor: pointer; font-weight: bold; color: #999; }
         #form-bottom-row { display: flex; gap: 10px; align-items: flex-end; }
-        #file-input-label { padding: 8px; cursor: pointer; }
+        #file-input-label { padding: 8px; cursor: pointer; transition: opacity 0.2s; }
         #file-input-label svg { width: 24px; height: 24px; fill: #555; }
         #message-input { flex-grow: 1; padding: 10px; border: none; resize: none; font-size: 1em; height: 24px; max-height: 100px; overflow-y: auto; background: transparent; }
         #message-input:focus { outline: none; }
@@ -241,6 +241,7 @@
         const errorMessageDiv = document.getElementById('error-message');
         const loadingIndicator = document.getElementById('loading-indicator');
         const fileInput = document.getElementById('file-input');
+        const fileInputLabel = document.getElementById('file-input-label');
         const filePreview = document.getElementById('file-preview');
         const toastNotification = document.getElementById('toast-notification');
 
@@ -344,7 +345,14 @@
             const userInput = messageInput.value.trim();
             if (!userInput && attachedFiles.length === 0) return;
 
+            // --- UIを無効化 ---
+            inputWrapper.classList.add('submitting');
             sendButton.disabled = true;
+            messageInput.disabled = true;
+            fileInput.disabled = true;
+            fileInputLabel.style.cursor = 'not-allowed';
+            fileInputLabel.style.opacity = '0.5';
+            document.querySelectorAll('.remove-file').forEach(btn => btn.style.display = 'none');
             loadingIndicator.style.display = 'flex';
             
             const filesToSend = [...attachedFiles];
@@ -370,8 +378,15 @@
                 displayError(msg);
                 conversationHistory.pop(); 
             } finally {
+                // --- UIを有効化 ---
+                inputWrapper.classList.remove('submitting');
                 sendButton.disabled = false;
+                messageInput.disabled = false;
+                fileInput.disabled = false;
+                fileInputLabel.style.cursor = 'pointer';
+                fileInputLabel.style.opacity = '1';
                 loadingIndicator.style.display = 'none';
+                
                 attachedFiles = [];
                 renderFilePreview();
                 messageInput.value = '';
@@ -574,8 +589,17 @@
         }
 
         function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
-        function handleFileDrop({ dataTransfer }) { addFiles(dataTransfer.files); }
-        function handleFileSelect(e) { addFiles(e.target.files); e.target.value = ''; }
+        
+        function handleFileDrop({ dataTransfer }) {
+            if (inputWrapper.classList.contains('submitting')) return; // 送信中はドロップを無視
+            addFiles(dataTransfer.files);
+        }
+
+        function handleFileSelect(e) { 
+            if (fileInput.disabled) return; // 送信中は選択を無視
+            addFiles(e.target.files); 
+            e.target.value = ''; 
+        }
 
         function addFiles(files) {
             for (const file of files) {

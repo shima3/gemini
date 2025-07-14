@@ -62,6 +62,8 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            /* === 修正: max-heightをheightに変更し、常に画面いっぱいの高さを確保 === */
+            height: calc(100vh - 40px); /* bodyのpadding(上下20px*2)を考慮 */
         }
         
         header {
@@ -84,11 +86,17 @@
         .form-group { display: flex; flex-direction: column; }
         .form-group label { margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
         .form-group input { padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; font-size: 1em; }
-
-        #chat-container { display: flex; flex-direction: column; flex-grow: 1; height: 70vh; }
+        
+        /* === 修正: flexboxで高さを可変にする設定を維持 === */
+        #chat-container {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1; /* 親コンテナ内の残りのスペースを埋める */
+            min-height: 0; /* flexアイテムの縮小問題を回避 */
+        }
         
         #chat-history {
-            flex-grow: 1;
+            flex-grow: 1; /* chat-container内の残りのスペースを埋める */
             overflow-y: auto;
             padding: 20px;
             display: flex;
@@ -149,16 +157,14 @@
         .code-header .code-actions button:hover { background-color: #555; }
         pre, code { margin: 0; font-family: 'Courier New', Courier, monospace; }
         
-        /* === 修正箇所 === */
         .ai-message pre {
             background-color: var(--code-bg-color);
             padding: 15px;
             max-height: 400px;
-            white-space: pre-wrap;   /* テキストを折り返す */
-            word-break: break-all;   /* 長い単語も強制的に改行する */
-            overflow-y: auto;        /* 縦方向のスクロールは維持する */
+            white-space: pre-wrap;
+            word-break: break-all;
+            overflow-y: auto;
         }
-        /* === 修正ここまで === */
 
         .message-files-container { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
         .user-message .message-files-container img { max-width: 150px; max-height: 150px; border-radius: 8px; margin-top: 0; }

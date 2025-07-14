@@ -291,7 +291,7 @@
                            <label id="file-input-label" for="file-input">
                                 <svg viewBox="0 0 24 24"><path d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" /></svg>
                            </label>
-                           <input type="file" id="file-input" multiple style="display: none;" accept="image/*,video/*">
+                           <input type="file" id="file-input" multiple style="display: none;">
                            <textarea id="message-input" placeholder="メッセージを入力、またはファイルをドロップ (Ctrl+Enterで送信)" rows="1"></textarea>
                            <button type="submit" id="send-button">送信</button>
                         </div>
@@ -331,7 +331,14 @@
         let conversationHistory = []; // Used only for initializing chat
         let attachedFiles = [];
 
-        // --- NEW --- Helper function to get a formatted timestamp
+        const TEXT_MIME_TYPES = ['application/json', 'application/xml', 'application/javascript', 'application/csv', 'application/x-sh'];
+        const TEXT_EXTENSIONS = [
+            'txt', 'md', 'html', 'css', 'js', 'ts', 'jsx', 'tsx', 'json', 'xml', 'csv', 
+            'py', 'rb', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'sh', 'bat', 'ps1', 
+            'sql', 'log', 'ini', 'toml', 'yaml', 'yml', 'svg', 'go', 'php', 'swift'
+        ];
+
+
         function getFormattedTimestamp() {
             const now = new Date();
             const y = now.getFullYear();
@@ -344,7 +351,6 @@
         }
 
         function initializeApp() {
-            // Event Listeners
             settingsToggleBtn.addEventListener('click', () => settingsContainer.classList.toggle('hidden'));
             apiKeyInput.addEventListener('change', saveAndReinitializeChat);
             modelInput.addEventListener('change', saveAndReinitializeChat);
@@ -361,7 +367,6 @@
             
             loadingIndicator.innerHTML = `<div class="spinner"></div><span>AIが応答を生成中...</span>`;
 
-            // Load settings from localStorage
             const savedApiKey = localStorage.getItem('geminiApiKey');
             const savedModel = localStorage.getItem('geminiModel');
             
@@ -389,7 +394,7 @@
             localStorage.setItem('geminiModel', modelName);
             
             clearError();
-            conversationHistory = []; // Clear history for re-initialization
+            conversationHistory = [];
             chatHistory.innerHTML = '';
             setupChat();
             settingsContainer.classList.add('hidden');
@@ -416,7 +421,6 @@
                     systemInstruction: "あなたはWebデザインとコーディングを支援するAIです。ユーザーから図形やグラフの描画を指示された場合は、必ずSVGコードを生成し、そのコードブロックの言語指定を ```svg として応答してください。他の形式（xmlなど）は使用しないでください。また、数式を記述する際は、必ずLaTeX形式（インラインは`$...$`、ブロックは`$$...$$`）を使用してください。",
                 });
                 
-                // Initialize chat with the current history (could be empty or from an uploaded file)
                 chat = model.startChat({ history: conversationHistory });
 
                 chatContainer.style.display = 'flex';
@@ -432,7 +436,6 @@
             const userInput = messageInput.value.trim();
             if (!userInput && attachedFiles.length === 0) return;
 
-            // --- Disable UI ---
             inputWrapper.classList.add('submitting');
             sendButton.disabled = true;
             messageInput.disabled = true;
@@ -442,19 +445,36 @@
             loadingIndicator.style.display = 'flex';
             
             const filesToSend = [...attachedFiles];
-            // Display the user message immediately for better UX
             addMessageToDisplay('user', userInput, filesToSend);
 
             try {
-                const fileParts = await Promise.all(filesToSend.map(fileToGenerativePart));
-                const parts = [...fileParts, ...(userInput ? [{ text: userInput }] : [])];
+                const filePromises = filesToSend.map(file => {
+                    if (isTextFile(file)) {
+                        return readTextFileAsPart(file);
+                    } else {
+                        return fileToGenerativePart(file);
+                    }
+                });
                 
-                // The chat object will manage its own history. No need to push manually.
+                const allParts = await Promise.all(filePromises);
+                
+                const textPartsContent = allParts.filter(p => p.text).map(p => p.text);
+                const dataParts = allParts.filter(p => p.inlineData);
+
+                const combinedText = [
+                    ...textPartsContent,
+                    userInput
+                ].filter(Boolean).join('\n\n');
+
+                const parts = [
+                    ...dataParts,
+                    ...(combinedText ? [{ text: combinedText }] : [])
+                ];
+                
                 const result = await chat.sendMessage(parts);
                 const response = await result.response;
                 const text = response.text();
 
-                // Display AI's response
                 addMessageToDisplay('model', text);
                 clearError();
 
@@ -463,13 +483,11 @@
                 const msg = error.message.includes("API key not valid") ? "APIキーが無効です。" : `APIエラー: ${error.message}`;
                 displayError(msg);
                 
-                // If sending failed, remove the user message from the display
-                if (chatHistory.lastChild) {
+                if (chatHistory.lastChild && chatHistory.lastChild.classList.contains('user')) {
                     chatHistory.removeChild(chatHistory.lastChild);
                 }
 
             } finally {
-                // --- Enable UI ---
                 inputWrapper.classList.remove('submitting');
                 sendButton.disabled = false;
                 messageInput.disabled = false;
@@ -484,6 +502,30 @@
             }
         }
 
+        function isTextFile(file) {
+            const fileType = file.type;
+            const fileName = file.name || '';
+            const fileExtension = fileName.split('.').pop()?.toLowerCase();
+
+            if (fileType && fileType.startsWith('text/')) return true;
+            if (fileType && TEXT_MIME_TYPES.includes(fileType)) return true;
+            if (fileExtension && TEXT_EXTENSIONS.includes(fileExtension)) return true;
+            
+            return false;
+        }
+
+        function readTextFileAsPart(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const formattedText = `[添付ファイル: ${file.name}]\n\`\`\`\n${e.target.result}\n\`\`\``;
+                    resolve({ text: formattedText });
+                };
+                reader.onerror = reject;
+                reader.readAsText(file);
+            });
+        }
+        
         function fileToGenerativePart(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -517,16 +559,17 @@
 
                     files.forEach(file => {
                         const isFileObject = file instanceof File;
-                        const mimeType = isFileObject ? file.type : file.mimeType;
+                        const mimeType = isFileObject ? file.type : (file.inlineData ? file.inlineData.mimeType : '');
                         const fileName = isFileObject ? file.name : `添付ファイル (${mimeType})`;
-
-                        if (mimeType && mimeType.startsWith('image/')) {
+                        const isImage = mimeType && mimeType.startsWith('image/');
+                        
+                        if (isImage) {
                             const img = document.createElement('img');
                             if (isFileObject) {
                                 img.src = URL.createObjectURL(file);
                                 img.onload = () => URL.revokeObjectURL(img.src);
-                            } else { // from history (inlineData object)
-                                img.src = `data:${file.mimeType};base64,${file.data}`;
+                            } else {
+                                img.src = `data:${mimeType};base64,${file.inlineData.data}`;
                             }
                             filesContainer.appendChild(img);
                         } else {
@@ -562,13 +605,18 @@
         }
 
         function renderFormattedContent(container, text) {
-            const blockRegex = /```(\w*)\n([\s\S]*?)\n```/g;
+            const fileBlockRegex = /\[添付ファイル: (.*?)\]\n```([\s\S]*?)```/g;
+            const codeBlockRegex = /```(\w*)\n([\s\S]*?)\n```/g;
             let lastIndex = 0;
             let match;
-
-            while ((match = blockRegex.exec(text)) !== null) {
+            
+            let processedText = text.replace(fileBlockRegex, (match, fileName) => {
+                return `\n[AIはファイル "${fileName}" の内容を参照しました]\n`;
+            });
+            
+            while ((match = codeBlockRegex.exec(processedText)) !== null) {
                 if (match.index > lastIndex) {
-                    container.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+                    container.appendChild(document.createTextNode(processedText.substring(lastIndex, match.index)));
                 }
 
                 const language = (match[1] || 'plaintext').toLowerCase();
@@ -589,11 +637,11 @@
                 } else {
                     renderAsCodeBlock(container, code, language);
                 }
-                lastIndex = blockRegex.lastIndex;
+                lastIndex = codeBlockRegex.lastIndex;
             }
 
-            if (lastIndex < text.length) {
-                container.appendChild(document.createTextNode(text.substring(lastIndex)));
+            if (lastIndex < processedText.length) {
+                container.appendChild(document.createTextNode(processedText.substring(lastIndex)));
             }
         }
 
@@ -633,29 +681,23 @@
                 showToast("チャットが開始されていません。");
                 return;
             }
-            
             try {
-                // Get the accurate, up-to-date history directly from the chat session
                 const currentHistory = await chat.getHistory();
-                
                 if (currentHistory.length === 0) {
                     showToast("対話履歴がありません。");
                     return;
                 }
-                
                 const historyJson = JSON.stringify(currentHistory, null, 2);
                 const blob = new Blob([historyJson], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                // --- MODIFIED --- Use formatted timestamp for filename
                 a.download = `gemini-chat-history-${getFormattedTimestamp()}.json`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
                 showToast("履歴をダウンロードしました。");
-
             } catch (error) {
                 console.error("履歴の取得/ダウンロードに失敗:", error);
                 displayError("履歴のダウンロードに失敗しました。");
@@ -672,28 +714,29 @@
                     if (!Array.isArray(newHistory) || newHistory.some(item => typeof item.role === 'undefined' || typeof item.parts === 'undefined')) {
                         throw new Error("無効な履歴ファイル形式です。");
                     }
-                    // Set the history for the next chat initialization
                     conversationHistory = newHistory;
                     rebuildChatDisplay();
-                    setupChat(); // Re-initialize the chat session with the new history
+                    setupChat(); 
                     settingsContainer.classList.add('hidden');
                     showToast("履歴をアップロードしました。");
                 } catch (error) {
                     displayError(`履歴の読み込みに失敗しました: ${error.message}`);
                 } finally {
-                    event.target.value = ''; // Reset input to allow re-uploading the same file
+                    event.target.value = ''; 
                 }
             };
             reader.onerror = () => displayError("ファイルの読み込み中にエラーが発生しました。");
             reader.readAsText(file);
         }
-        
+    
         function rebuildChatDisplay() {
             chatHistory.innerHTML = '';
             conversationHistory.forEach(message => {
-                const textPart = message.parts.find(p => p.text)?.text || '';
-                const fileParts = message.parts.filter(p => p.inlineData).map(p => p.inlineData);
-                addMessageToDisplay(message.role, textPart, fileParts);
+                const textParts = message.parts.filter(p => p.text);
+                const fileParts = message.parts.filter(p => p.inlineData);
+                const combinedText = textParts.map(p => p.text).join('\n\n');
+                
+                addMessageToDisplay(message.role, combinedText, fileParts);
             });
 
             if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
@@ -711,7 +754,6 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            // --- MODIFIED --- Use formatted timestamp for filename
             a.download = `code-${getFormattedTimestamp()}.${extension}`;
             document.body.appendChild(a);
             a.click();

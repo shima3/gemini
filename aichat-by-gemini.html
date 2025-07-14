@@ -62,8 +62,7 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            /* === 修正: max-heightをheightに変更し、常に画面いっぱいの高さを確保 === */
-            height: calc(100vh - 40px); /* bodyのpadding(上下20px*2)を考慮 */
+            height: calc(100vh - 40px);
         }
         
         header {
@@ -87,16 +86,15 @@
         .form-group label { margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
         .form-group input { padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; font-size: 1em; }
         
-        /* === 修正: flexboxで高さを可変にする設定を維持 === */
         #chat-container {
             display: flex;
             flex-direction: column;
-            flex-grow: 1; /* 親コンテナ内の残りのスペースを埋める */
-            min-height: 0; /* flexアイテムの縮小問題を回避 */
+            flex-grow: 1;
+            min-height: 0;
         }
         
         #chat-history {
-            flex-grow: 1; /* chat-container内の残りのスペースを埋める */
+            flex-grow: 1;
             overflow-y: auto;
             padding: 20px;
             display: flex;
@@ -189,6 +187,40 @@
         #error-message { color: var(--error-color); padding: 10px 20px; text-align: center; font-weight: bold; display: none; }
         #toast-notification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background-color: #28a745; color: white; padding: 10px 20px; border-radius: 5px; z-index: 1000; opacity: 0; transition: opacity 0.5s; font-size: 0.9em; }
         #toast-notification.show { opacity: 1; }
+
+        /* === 追加ここから === */
+        .api-key-guide {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #555;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        .api-key-guide h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: var(--text-color);
+            font-size: 1.1em;
+        }
+        .api-key-guide ol {
+            margin: 0;
+            padding-left: 20px;
+            line-height: 1.6;
+        }
+        .api-key-guide li {
+            margin-bottom: 5px;
+        }
+        .api-key-guide a {
+            color: var(--primary-color);
+            font-weight: 500;
+            text-decoration: none;
+        }
+        .api-key-guide a:hover {
+            text-decoration: underline;
+        }
+        /* === 追加ここまで === */
     </style>
 </head>
 <body>
@@ -199,6 +231,7 @@
             <button id="settings-toggle">設定</button>
         </header>
 
+        <!-- ▼▼▼ HTML修正箇所 ▼▼▼ -->
         <div id="settings-container" class="hidden">
             <div class="settings-grid">
                 <div class="form-group">
@@ -210,7 +243,17 @@
                     <input type="text" id="model-input" placeholder="例: gemini-1.5-pro-latest">
                 </div>
             </div>
+            <div class="api-key-guide">
+                <h4>APIキーの取得方法</h4>
+                <ol>
+                    <li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a> にアクセスします。</li>
+                    <li>「Create API key」ボタンをクリックして新しいキーを作成します。</li>
+                    <li>生成されたキーをコピーし、上のAPIキー入力欄に貼り付けてください。</li>
+                </ol>
+                <p style="font-size: 0.85em; color: #666; margin-top: 10px; margin-bottom: 0;">※APIキーはブラウザのローカルストレージに保存され、このページ以外からアクセスされることはありません。</p>
+            </div>
         </div>
+        <!-- ▲▲▲ HTML修正箇所 ▲▲▲ -->
 
         <div id="error-message"></div>
 

@@ -331,6 +331,18 @@
         let conversationHistory = []; // Used only for initializing chat
         let attachedFiles = [];
 
+        // --- NEW --- Helper function to get a formatted timestamp
+        function getFormattedTimestamp() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            const h = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            return `${y}${m}${d}-${h}${min}${s}`;
+        }
+
         function initializeApp() {
             // Event Listeners
             settingsToggleBtn.addEventListener('click', () => settingsContainer.classList.toggle('hidden'));
@@ -636,7 +648,8 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `gemini-chat-history-${Date.now()}.json`;
+                // --- MODIFIED --- Use formatted timestamp for filename
+                a.download = `gemini-chat-history-${getFormattedTimestamp()}.json`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -690,6 +703,7 @@
         }
 
         function handleCopyClick(code) { navigator.clipboard.writeText(code).then(() => showToast("コピーしました！")); }
+        
         function handleDownloadClick(code, language) {
             const langMap = { 'javascript': 'js', 'python': 'py', 'html': 'html', 'css': 'css', 'java': 'java', 'csharp': 'cs', 'cpp': 'cpp', 'ruby': 'rb', 'go': 'go', 'shell': 'sh', 'bash': 'sh', 'json': 'json', 'sql': 'sql', 'typescript': 'ts', 'xml': 'xml', 'yaml': 'yaml', 'svg': 'svg' };
             const extension = langMap[language.toLowerCase()] || 'txt';
@@ -697,7 +711,8 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `code-${Date.now()}.${extension}`;
+            // --- MODIFIED --- Use formatted timestamp for filename
+            a.download = `code-${getFormattedTimestamp()}.${extension}`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

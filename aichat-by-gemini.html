@@ -188,7 +188,6 @@
         #toast-notification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background-color: #28a745; color: white; padding: 10px 20px; border-radius: 5px; z-index: 1000; opacity: 0; transition: opacity 0.5s; font-size: 0.9em; }
         #toast-notification.show { opacity: 1; }
 
-        /* === 追加ここから === */
         .api-key-guide {
             margin-top: 20px;
             font-size: 0.9em;
@@ -198,29 +197,46 @@
             border-radius: 8px;
             border: 1px solid var(--border-color);
         }
-        .api-key-guide h4 {
+        .api-key-guide h4 { margin-top: 0; margin-bottom: 10px; color: var(--text-color); font-size: 1.1em; }
+        .api-key-guide ol { margin: 0; padding-left: 20px; line-height: 1.6; }
+        .api-key-guide li { margin-bottom: 5px; }
+        .api-key-guide a { color: var(--primary-color); font-weight: 500; text-decoration: none; }
+        .api-key-guide a:hover { text-decoration: underline; }
+
+        .history-management {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+        }
+        .history-management h4 {
             margin-top: 0;
             margin-bottom: 10px;
             color: var(--text-color);
             font-size: 1.1em;
         }
-        .api-key-guide ol {
-            margin: 0;
-            padding-left: 20px;
-            line-height: 1.6;
+        .history-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
         }
-        .api-key-guide li {
-            margin-bottom: 5px;
-        }
-        .api-key-guide a {
+        .history-buttons button, .history-buttons .button-label {
+            padding: 8px 15px;
+            border: 1px solid var(--primary-color);
+            background-color: white;
             color: var(--primary-color);
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
             font-weight: 500;
-            text-decoration: none;
+            transition: background-color 0.2s, color 0.2s;
+            text-align: center;
+            display: inline-block;
         }
-        .api-key-guide a:hover {
-            text-decoration: underline;
+        .history-buttons button:hover, .history-buttons .button-label:hover {
+            background-color: var(--primary-color);
+            color: white;
         }
-        /* === 追加ここまで === */
     </style>
 </head>
 <body>
@@ -231,7 +247,6 @@
             <button id="settings-toggle">設定</button>
         </header>
 
-        <!-- ▼▼▼ HTML修正箇所 ▼▼▼ -->
         <div id="settings-container" class="hidden">
             <div class="settings-grid">
                 <div class="form-group">
@@ -252,8 +267,16 @@
                 </ol>
                 <p style="font-size: 0.85em; color: #666; margin-top: 10px; margin-bottom: 0;">※APIキーはブラウザのローカルストレージに保存され、このページ以外からアクセスされることはありません。</p>
             </div>
+            <div class="history-management">
+                <h4>対話履歴の管理</h4>
+                <div class="history-buttons">
+                    <button id="download-history-btn">履歴をダウンロード</button>
+                    <label for="upload-history-input" class="button-label">履歴をアップロード</label>
+                    <input type="file" id="upload-history-input" accept=".json" style="display: none;">
+                </div>
+                <p style="font-size: 0.85em; color: #666; margin-top: 10px; margin-bottom: 0;">※現在の対話履歴をJSONファイルとして保存・読み込みできます。アップロードすると現在の履歴は上書きされます。</p>
+            </div>
         </div>
-        <!-- ▲▲▲ HTML修正箇所 ▲▲▲ -->
 
         <div id="error-message"></div>
 
@@ -282,6 +305,7 @@
     <script type="module">
         const { GoogleGenerativeAI } = await import("https://unpkg.com/@google/generative-ai/dist/index.mjs");
 
+        // DOM Elements
         const settingsContainer = document.getElementById('settings-container');
         const settingsToggleBtn = document.getElementById('settings-toggle');
         const apiKeyInput = document.getElementById('api-key');
@@ -298,14 +322,17 @@
         const fileInputLabel = document.getElementById('file-input-label');
         const filePreview = document.getElementById('file-preview');
         const toastNotification = document.getElementById('toast-notification');
+        const downloadHistoryBtn = document.getElementById('download-history-btn');
+        const uploadHistoryInput = document.getElementById('upload-history-input');
 
+        // State
         let genAI;
         let chat;
-        let conversationHistory = [];
+        let conversationHistory = []; // Used only for initializing chat
         let attachedFiles = [];
 
         function initializeApp() {
-            // イベントリスナーを先に設定
+            // Event Listeners
             settingsToggleBtn.addEventListener('click', () => settingsContainer.classList.toggle('hidden'));
             apiKeyInput.addEventListener('change', saveAndReinitializeChat);
             modelInput.addEventListener('change', saveAndReinitializeChat);
@@ -317,10 +344,12 @@
             ['dragenter', 'dragover'].forEach(eName => inputWrapper.addEventListener(eName, () => inputWrapper.classList.add('drag-over'), false));
             ['dragleave', 'drop'].forEach(eName => inputWrapper.addEventListener(eName, () => inputWrapper.classList.remove('drag-over'), false));
             inputWrapper.addEventListener('drop', handleFileDrop, false);
+            downloadHistoryBtn.addEventListener('click', handleDownloadHistory);
+            uploadHistoryInput.addEventListener('change', handleUploadHistory);
             
             loadingIndicator.innerHTML = `<div class="spinner"></div><span>AIが応答を生成中...</span>`;
 
-            // localStorageから設定を読み込む
+            // Load settings from localStorage
             const savedApiKey = localStorage.getItem('geminiApiKey');
             const savedModel = localStorage.getItem('geminiModel');
             
@@ -328,13 +357,12 @@
             
             if (savedApiKey) {
                 apiKeyInput.value = savedApiKey;
-                settingsContainer.classList.add('hidden'); // APIキーがあれば設定画面は閉じておく
+                settingsContainer.classList.add('hidden');
                 setupChat();
             } else {
-                // APIキーが未設定の場合
-                settingsContainer.classList.remove('hidden'); // 設定画面を開く
+                settingsContainer.classList.remove('hidden');
                 displayError("APIキーが設定されていません。設定画面でAPIキーを入力してください。");
-                chatContainer.style.display = 'none'; // チャットUIを非表示にする
+                chatContainer.style.display = 'none';
             }
         }
         
@@ -342,23 +370,17 @@
             const apiKey = apiKeyInput.value.trim();
             const modelName = modelInput.value.trim();
 
-            if (!apiKey) {
-                displayError("APIキーを入力してください。");
-                return;
-            }
-             if (!modelName) {
-                displayError("モデル名を入力してください。");
-                return;
-            }
+            if (!apiKey) { displayError("APIキーを入力してください。"); return; }
+            if (!modelName) { displayError("モデル名を入力してください。"); return; }
 
             localStorage.setItem('geminiApiKey', apiKey);
             localStorage.setItem('geminiModel', modelName);
             
             clearError();
-            conversationHistory = [];
-            chatHistory.innerHTML = ''; // 表示されているチャット履歴もクリア
-            setupChat(); // チャットを再セットアップ
-            settingsContainer.classList.add('hidden'); // 設定を保存したら設定画面を閉じる
+            conversationHistory = []; // Clear history for re-initialization
+            chatHistory.innerHTML = '';
+            setupChat();
+            settingsContainer.classList.add('hidden');
         }
         
         function setupChat() {
@@ -382,11 +404,10 @@
                     systemInstruction: "あなたはWebデザインとコーディングを支援するAIです。ユーザーから図形やグラフの描画を指示された場合は、必ずSVGコードを生成し、そのコードブロックの言語指定を ```svg として応答してください。他の形式（xmlなど）は使用しないでください。また、数式を記述する際は、必ずLaTeX形式（インラインは`$...$`、ブロックは`$$...$$`）を使用してください。",
                 });
                 
-                chat = model.startChat({ 
-                    history: conversationHistory, 
-                });
+                // Initialize chat with the current history (could be empty or from an uploaded file)
+                chat = model.startChat({ history: conversationHistory });
 
-                chatContainer.style.display = 'flex'; // チャットUIを表示
+                chatContainer.style.display = 'flex';
                 clearError();
             } catch (error) { 
                 displayError(`チャットの初期化に失敗: ${error.message}`); 
@@ -399,46 +420,49 @@
             const userInput = messageInput.value.trim();
             if (!userInput && attachedFiles.length === 0) return;
 
-            // --- UIを無効化 ---
+            // --- Disable UI ---
             inputWrapper.classList.add('submitting');
             sendButton.disabled = true;
             messageInput.disabled = true;
             fileInput.disabled = true;
-            fileInputLabel.style.cursor = 'not-allowed';
-            fileInputLabel.style.opacity = '0.5';
+            fileInputLabel.style.cssText = 'cursor: not-allowed; opacity: 0.5;';
             document.querySelectorAll('.remove-file').forEach(btn => btn.style.display = 'none');
             loadingIndicator.style.display = 'flex';
             
             const filesToSend = [...attachedFiles];
+            // Display the user message immediately for better UX
             addMessageToDisplay('user', userInput, filesToSend);
 
             try {
                 const fileParts = await Promise.all(filesToSend.map(fileToGenerativePart));
                 const parts = [...fileParts, ...(userInput ? [{ text: userInput }] : [])];
                 
-                conversationHistory.push({ role: "user", parts });
-                
+                // The chat object will manage its own history. No need to push manually.
                 const result = await chat.sendMessage(parts);
                 const response = await result.response;
                 const text = response.text();
 
-                conversationHistory.push({ role: "model", parts: [{ text }] });
-                
+                // Display AI's response
                 addMessageToDisplay('model', text);
                 clearError();
+
             } catch (error) {
                 console.error('API Error:', error);
                 const msg = error.message.includes("API key not valid") ? "APIキーが無効です。" : `APIエラー: ${error.message}`;
                 displayError(msg);
-                conversationHistory.pop(); 
+                
+                // If sending failed, remove the user message from the display
+                if (chatHistory.lastChild) {
+                    chatHistory.removeChild(chatHistory.lastChild);
+                }
+
             } finally {
-                // --- UIを有効化 ---
+                // --- Enable UI ---
                 inputWrapper.classList.remove('submitting');
                 sendButton.disabled = false;
                 messageInput.disabled = false;
                 fileInput.disabled = false;
-                fileInputLabel.style.cursor = 'pointer';
-                fileInputLabel.style.opacity = '1';
+                fileInputLabel.style.cssText = 'cursor: pointer; opacity: 1;';
                 loadingIndicator.style.display = 'none';
                 
                 attachedFiles = [];
@@ -477,22 +501,28 @@
                 if (files.length > 0) {
                     const filesContainer = document.createElement('div');
                     filesContainer.className = 'message-files-container';
-                    if (text) {
-                        filesContainer.style.marginTop = '8px';
-                    }
+                    if (text) filesContainer.style.marginTop = '8px';
 
                     files.forEach(file => {
-                        if (file.type.startsWith('image/')) {
+                        const isFileObject = file instanceof File;
+                        const mimeType = isFileObject ? file.type : file.mimeType;
+                        const fileName = isFileObject ? file.name : `添付ファイル (${mimeType})`;
+
+                        if (mimeType && mimeType.startsWith('image/')) {
                             const img = document.createElement('img');
-                            img.src = URL.createObjectURL(file);
-                            img.onload = () => URL.revokeObjectURL(img.src);
+                            if (isFileObject) {
+                                img.src = URL.createObjectURL(file);
+                                img.onload = () => URL.revokeObjectURL(img.src);
+                            } else { // from history (inlineData object)
+                                img.src = `data:${file.mimeType};base64,${file.data}`;
+                            }
                             filesContainer.appendChild(img);
                         } else {
                             const fileItem = document.createElement('div');
                             fileItem.className = 'file-display-item';
                             fileItem.innerHTML = `
                                 <svg viewBox="0 0 24 24"><path fill="currentColor" d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" /></svg>
-                                <span>${file.name}</span>
+                                <span>${fileName}</span>
                             `;
                             filesContainer.appendChild(fileItem);
                         }
@@ -506,20 +536,14 @@
             timestampEl.textContent = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
             
             messageEl.appendChild(contentEl);
-            
             messageRow.appendChild(messageEl);
             messageRow.appendChild(timestampEl);
-            
             chatHistory.appendChild(messageRow);
 
             if (sender === 'model' && typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
-                Promise.resolve().then(() => {
-                    return MathJax.typesetPromise([contentEl]);
-                }).catch((err) => {
-                    console.error('MathJax typesetting error:', err);
-                }).finally(() => {
-                    chatHistory.scrollTop = chatHistory.scrollHeight;
-                });
+                Promise.resolve().then(() => MathJax.typesetPromise([contentEl]))
+                    .catch((err) => console.error('MathJax typesetting error:', err))
+                    .finally(() => chatHistory.scrollTop = chatHistory.scrollHeight);
             } else {
                 chatHistory.scrollTop = chatHistory.scrollHeight;
             }
@@ -537,26 +561,15 @@
 
                 const language = (match[1] || 'plaintext').toLowerCase();
                 const code = match[2];
-                
-                const isSvg = language === 'svg' || 
-                              (language === 'xml' && code.trim().startsWith('<svg')) ||
-                              (language === 'plaintext' && code.trim().startsWith('<svg'));
+                const isSvg = language === 'svg' || (language === 'xml' && code.trim().startsWith('<svg'));
 
                 if (isSvg) {
                     const svgContainer = document.createElement('div');
                     svgContainer.innerHTML = code;
-                    
                     const svgElement = svgContainer.querySelector('svg');
                     if (svgElement) {
-                        svgElement.style.maxWidth = '100%';
-                        svgElement.style.height = 'auto';
-                        svgElement.style.display = 'block';
-                        
-                        svgContainer.style.background = '#ffffff';
-                        svgContainer.style.border = '1px solid var(--border-color)';
-                        svgContainer.style.borderRadius = '8px';
-                        svgContainer.style.padding = '10px';
-                        svgContainer.style.margin = '1em 0';
+                        svgElement.style.cssText = 'max-width: 100%; height: auto; display: block;';
+                        svgContainer.style.cssText = 'background: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; margin: 1em 0;';
                         container.appendChild(svgContainer);
                     } else {
                         renderAsCodeBlock(container, code, 'xml');
@@ -564,7 +577,6 @@
                 } else {
                     renderAsCodeBlock(container, code, language);
                 }
-
                 lastIndex = blockRegex.lastIndex;
             }
 
@@ -576,50 +588,111 @@
         function renderAsCodeBlock(container, code, language) {
             const wrapper = document.createElement('div');
             wrapper.className = 'code-block-wrapper';
-            
             const header = document.createElement('div');
             header.className = 'code-header';
-            
             const langName = document.createElement('span');
             langName.className = 'language-name';
             langName.textContent = language === 'plaintext' ? 'text' : language;
-            
             const actions = document.createElement('div');
             actions.className = 'code-actions';
-
             const copyBtn = document.createElement('button');
             copyBtn.textContent = 'Copy';
             copyBtn.onclick = () => handleCopyClick(code);
-            
             const downloadBtn = document.createElement('button');
             downloadBtn.textContent = 'Download';
             downloadBtn.onclick = () => handleDownloadClick(code, language);
-
             actions.appendChild(copyBtn);
             actions.appendChild(downloadBtn);
             header.appendChild(langName);
             header.appendChild(actions);
-            wrapper.appendChild(header);
-
             const pre = document.createElement('pre');
             const codeEl = document.createElement('code');
             codeEl.className = `language-${language}`;
             codeEl.textContent = code;
             pre.appendChild(codeEl);
+            wrapper.appendChild(header);
             wrapper.appendChild(pre);
             container.appendChild(wrapper);
-
             hljs.highlightElement(codeEl);
         }
 
-        function handleCopyClick(code) {
-            navigator.clipboard.writeText(code).then(() => {
-                showToast("コピーしました！");
-            });
+        async function handleDownloadHistory() {
+            if (!chat) {
+                showToast("チャットが開始されていません。");
+                return;
+            }
+            
+            try {
+                // Get the accurate, up-to-date history directly from the chat session
+                const currentHistory = await chat.getHistory();
+                
+                if (currentHistory.length === 0) {
+                    showToast("対話履歴がありません。");
+                    return;
+                }
+                
+                const historyJson = JSON.stringify(currentHistory, null, 2);
+                const blob = new Blob([historyJson], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `gemini-chat-history-${Date.now()}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast("履歴をダウンロードしました。");
+
+            } catch (error) {
+                console.error("履歴の取得/ダウンロードに失敗:", error);
+                displayError("履歴のダウンロードに失敗しました。");
+            }
+        }
+
+        function handleUploadHistory(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const newHistory = JSON.parse(e.target.result);
+                    if (!Array.isArray(newHistory) || newHistory.some(item => typeof item.role === 'undefined' || typeof item.parts === 'undefined')) {
+                        throw new Error("無効な履歴ファイル形式です。");
+                    }
+                    // Set the history for the next chat initialization
+                    conversationHistory = newHistory;
+                    rebuildChatDisplay();
+                    setupChat(); // Re-initialize the chat session with the new history
+                    settingsContainer.classList.add('hidden');
+                    showToast("履歴をアップロードしました。");
+                } catch (error) {
+                    displayError(`履歴の読み込みに失敗しました: ${error.message}`);
+                } finally {
+                    event.target.value = ''; // Reset input to allow re-uploading the same file
+                }
+            };
+            reader.onerror = () => displayError("ファイルの読み込み中にエラーが発生しました。");
+            reader.readAsText(file);
         }
         
+        function rebuildChatDisplay() {
+            chatHistory.innerHTML = '';
+            conversationHistory.forEach(message => {
+                const textPart = message.parts.find(p => p.text)?.text || '';
+                const fileParts = message.parts.filter(p => p.inlineData).map(p => p.inlineData);
+                addMessageToDisplay(message.role, textPart, fileParts);
+            });
+
+            if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
+                Promise.resolve().then(() => MathJax.typesetPromise([chatHistory]))
+                    .catch((err) => console.error('MathJax typesetting error during rebuild:', err));
+            }
+        }
+
+        function handleCopyClick(code) { navigator.clipboard.writeText(code).then(() => showToast("コピーしました！")); }
         function handleDownloadClick(code, language) {
-            const extension = getCodeExtension(language);
+            const langMap = { 'javascript': 'js', 'python': 'py', 'html': 'html', 'css': 'css', 'java': 'java', 'csharp': 'cs', 'cpp': 'cpp', 'ruby': 'rb', 'go': 'go', 'shell': 'sh', 'bash': 'sh', 'json': 'json', 'sql': 'sql', 'typescript': 'ts', 'xml': 'xml', 'yaml': 'yaml', 'svg': 'svg' };
+            const extension = langMap[language.toLowerCase()] || 'txt';
             const blob = new Blob([code], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -629,11 +702,6 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-        }
-
-        function getCodeExtension(language) {
-            const langMap = { 'javascript': 'js', 'python': 'py', 'html': 'html', 'css': 'css', 'java': 'java', 'csharp': 'cs', 'cpp': 'cpp', 'ruby': 'rb', 'go': 'go', 'shell': 'sh', 'bash': 'sh', 'json': 'json', 'sql': 'sql', 'typescript': 'ts', 'xml': 'xml', 'yaml': 'yaml', 'svg': 'svg' };
-            return langMap[language.toLowerCase()] || 'txt';
         }
         
         function showToast(message) {
@@ -645,12 +713,12 @@
         function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
         
         function handleFileDrop({ dataTransfer }) {
-            if (inputWrapper.classList.contains('submitting')) return; // 送信中はドロップを無視
+            if (inputWrapper.classList.contains('submitting')) return;
             addFiles(dataTransfer.files);
         }
 
         function handleFileSelect(e) { 
-            if (fileInput.disabled) return; // 送信中は選択を無視
+            if (fileInput.disabled) return;
             addFiles(e.target.files); 
             e.target.value = ''; 
         }

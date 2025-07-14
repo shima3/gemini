@@ -148,12 +148,17 @@
         .code-header .code-actions button { background: none; border: 1px solid #777; color: #ccc; padding: 3px 8px; border-radius: 4px; cursor: pointer; margin-left: 8px; font-size: 0.9em; }
         .code-header .code-actions button:hover { background-color: #555; }
         pre, code { margin: 0; font-family: 'Courier New', Courier, monospace; }
+        
+        /* === 修正箇所 === */
         .ai-message pre {
             background-color: var(--code-bg-color);
             padding: 15px;
-            overflow: auto;
             max-height: 400px;
+            white-space: pre-wrap;   /* テキストを折り返す */
+            word-break: break-all;   /* 長い単語も強制的に改行する */
+            overflow-y: auto;        /* 縦方向のスクロールは維持する */
         }
+        /* === 修正ここまで === */
 
         .message-files-container { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
         .user-message .message-files-container img { max-width: 150px; max-height: 150px; border-radius: 8px; margin-top: 0; }

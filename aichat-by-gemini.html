@@ -104,7 +104,12 @@
         .code-header .code-actions button { background: none; border: 1px solid #777; color: #ccc; padding: 3px 8px; border-radius: 4px; cursor: pointer; margin-left: 8px; font-size: 0.9em; }
         .code-header .code-actions button:hover { background-color: #555; }
         pre, code { margin: 0; font-family: 'Courier New', Courier, monospace; }
-        .ai-message pre { background-color: var(--code-bg-color); padding: 15px; overflow-x: auto; }
+        .ai-message pre {
+            background-color: var(--code-bg-color);
+            padding: 15px;
+            overflow: auto; /* 水平・垂直両方のスクロールを有効に */
+            max-height: 400px; /* コードブロックの最大高さを400pxに制限 */
+        }
 
         .loading-indicator { align-self: flex-start; display: flex; align-items: center; gap: 8px; padding: 0 20px 10px; }
         .spinner { border: 3px solid #f3f3f3; border-top: 3px solid var(--primary-color); border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
@@ -136,7 +141,7 @@
             <button id="settings-toggle">設定</button>
         </header>
 
-        <div id="settings-container">
+        <div id="settings-container" class="hidden">
             <div class="settings-grid">
                 <div class="form-group">
                     <label for="api-key">APIキー</label>

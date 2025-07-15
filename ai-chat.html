@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Gemini API Chat App</title>
+    <title>AI Chat by Gemini API</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- highlight.js for syntax highlighting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
@@ -49,7 +49,6 @@
             display: flex;
             justify-content: center;
             align-items: flex-start;
-            /* 変更点 1: vh を dvh に変更し、モバイルデバイスでの動的なビューポート高に対応 */
             min-height: 100dvh;
             color: var(--text-color);
         }
@@ -63,7 +62,6 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            /* 変更点 2: vh を dvh に変更 */
             height: calc(100dvh - 40px);
         }
         
@@ -204,7 +202,6 @@
             100% { opacity: 0.2; }
         }
 
-        /* 変更点 3: フォームが縮まないように flex-shrink を設定 */
         #chat-form {
             flex-shrink: 0;
         }
@@ -281,7 +278,7 @@
 
     <div class="app-container">
         <header>
-            <h1>Gemini Chat</h1>
+            <h1 id="app-title">Gemini Chat</h1>
             <button id="settings-toggle">設定</button>
         </header>
 
@@ -362,6 +359,7 @@
         const toastNotification = document.getElementById('toast-notification');
         const downloadHistoryBtn = document.getElementById('download-history-btn');
         const uploadHistoryInput = document.getElementById('upload-history-input');
+        const appTitle = document.getElementById('app-title');
 
         // State
         let genAI;
@@ -375,6 +373,11 @@
             'py', 'rb', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'sh', 'bat', 'ps1', 
             'sql', 'log', 'ini', 'toml', 'yaml', 'yml', 'svg', 'go', 'php', 'swift'
         ];
+        
+        function updateAppTitle() {
+            const modelName = modelInput.value.trim();
+            appTitle.textContent = `AI Chat by Google ${modelName}`;
+        }
 
         function displayInitialWelcomeMessage() {
             const welcomeText = "ページの一番下にある枠にメッセージを入力し、送信するとAIが回答します。メッセージは外部に送信されるので、個人情報などを送信しないようご注意ください。AIの回答には誤りが含まれる可能性があるので、自己責任でご利用ください。";
@@ -408,6 +411,7 @@
             const savedModel = localStorage.getItem('geminiModel');
             
             modelInput.value = savedModel || 'gemini-1.5-pro-latest'; 
+            updateAppTitle();
             
             if (savedApiKey) {
                 apiKeyInput.value = savedApiKey;
@@ -435,6 +439,7 @@
             conversationHistory = [];
             chatHistory.innerHTML = '';
             displayInitialWelcomeMessage(); 
+            updateAppTitle();
             setupChat();
             settingsContainer.classList.add('hidden');
         }

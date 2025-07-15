@@ -338,6 +338,12 @@
             'sql', 'log', 'ini', 'toml', 'yaml', 'yml', 'svg', 'go', 'php', 'swift'
         ];
 
+        // --- 変更点 1: 初期メッセージ表示用の関数を新設 ---
+        function displayInitialWelcomeMessage() {
+            const welcomeText = "ページの一番下にある枠にメッセージを入力し、送信するとAIが回答します。メッセージは外部に送信されるので、個人情報などを送信しないようご注意ください。AIの回答には誤りが含まれる可能性があるので、自己責任でご利用ください。";
+            addMessageToDisplay('model', welcomeText);
+        }
+
         function initializeApp() {
             settingsToggleBtn.addEventListener('click', () => settingsContainer.classList.toggle('hidden'));
             apiKeyInput.addEventListener('change', saveAndReinitializeChat);
@@ -364,6 +370,8 @@
                 apiKeyInput.value = savedApiKey;
                 settingsContainer.classList.add('hidden');
                 setupChat();
+                // --- 変更点 2: 初期化時にメッセージを表示 ---
+                displayInitialWelcomeMessage();
             } else {
                 settingsContainer.classList.remove('hidden');
                 displayError("APIキーが設定されていません。設定画面でAPIキーを入力してください。");
@@ -384,6 +392,8 @@
             clearError();
             conversationHistory = [];
             chatHistory.innerHTML = '';
+            // --- 変更点 3: チャットリセット時にメッセージを再表示 ---
+            displayInitialWelcomeMessage(); 
             setupChat();
             settingsContainer.classList.add('hidden');
         }

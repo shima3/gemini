@@ -168,9 +168,42 @@
         .user-message .message-files-container img { max-width: 150px; max-height: 150px; border-radius: 8px; margin-top: 0; }
         .file-display-item { display: inline-flex; align-items: center; gap: 8px; background-color: rgba(0, 0, 0, 0.05); padding: 6px 12px; border-radius: 16px; font-size: 0.9em; }
         .file-display-item svg { width: 16px; height: 16px; fill: #555; flex-shrink: 0; }
-        .loading-indicator { align-self: flex-start; display: flex; align-items: center; gap: 8px; padding: 0 20px 10px; }
-        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid var(--primary-color); border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* --- 変更点 1: タイピングインジケーターのスタイル --- */
+        #loading-indicator {
+            align-self: flex-start;
+            padding: 0 20px;
+            margin-bottom: 10px;
+        }
+        .typing-indicator-bubble {
+            background-color: var(--ai-message-bg);
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+            padding: 12px 18px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #8e8e93;
+            border-radius: 50%;
+            animation: typing-blink 1.4s infinite both;
+        }
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        @keyframes typing-blink {
+            0% { opacity: 0.2; }
+            20% { opacity: 1; }
+            100% { opacity: 0.2; }
+        }
+        /* --- 変更点 1: ここまで --- */
+
         #chat-form-container { padding: 10px 20px 20px 20px; border-top: 1px solid var(--border-color); }
         #input-wrapper { display: flex; flex-direction: column; border: 1px solid var(--border-color); border-radius: 20px; padding: 5px; }
         #input-wrapper.drag-over { border-color: var(--primary-color); border-style: dashed; }
@@ -359,7 +392,14 @@
             downloadHistoryBtn.addEventListener('click', handleDownloadHistory);
             uploadHistoryInput.addEventListener('change', handleUploadHistory);
             
-            loadingIndicator.innerHTML = `<div class="spinner"></div><span>AIが応答を生成中...</span>`;
+            // --- 変更点 2: ローディングインジケーターをタイピングアニメーションに変更 ---
+            loadingIndicator.innerHTML = `
+                <div class="typing-indicator-bubble">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            `;
 
             const savedApiKey = localStorage.getItem('geminiApiKey');
             const savedModel = localStorage.getItem('geminiModel');

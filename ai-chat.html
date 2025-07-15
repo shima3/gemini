@@ -272,7 +272,7 @@
                 <div class="history-buttons">
                     <button id="download-history-btn">履歴をダウンロード</button>
                     <label for="upload-history-input" class="button-label">履歴をアップロード</label>
-                    <input type="file" id="upload-history-input" accept=".json" style="display: none;">
+                    <input type="file" id="upload-history-input" accept=".json,application/json" style="display: none;">
                 </div>
                 <p style="font-size: 0.85em; color: #666; margin-top: 10px; margin-bottom: 0;">※現在の対話履歴をJSONファイルとして保存・読み込みできます。アップロードすると現在の履歴は上書きされます。</p>
             </div>
@@ -548,8 +548,10 @@
 
                     files.forEach(file => {
                         const isFileObject = file instanceof File;
-                        const mimeType = isFileObject ? file.type : (file.inlineData ? file.inlineData.mimeType : '');
-                        const fileName = isFileObject ? file.name : `添付ファイル (${mimeType})`;
+                        const isReconstructed = !!file.isReconstructed;
+
+                        const mimeType = isFileObject ? file.type : (file.inlineData ? file.inlineData.mimeType : (isReconstructed ? 'text/plain' : ''));
+                        const fileName = isFileObject ? file.name : (isReconstructed ? file.name : `添付ファイル (${mimeType})`);
                         const isImage = mimeType && mimeType.startsWith('image/');
                         
                         if (isImage) {
@@ -557,11 +559,12 @@
                             if (isFileObject) {
                                 img.src = URL.createObjectURL(file);
                                 img.onload = () => URL.revokeObjectURL(img.src);
-                            } else {
+                            } else { // 履歴からの画像 (inlineData)
                                 img.src = `data:${mimeType};base64,${file.inlineData.data}`;
                             }
                             filesContainer.appendChild(img);
                         } else {
+                            // テキストファイル（新規添付または履歴からの復元）や、その他のファイル
                             const fileItem = document.createElement('div');
                             fileItem.className = 'file-display-item';
                             fileItem.innerHTML = `
@@ -726,12 +729,31 @@
     
         function rebuildChatDisplay() {
             chatHistory.innerHTML = '';
+            // テキストに埋め込まれたファイル情報を抽出するための正規表現
+            const fileBlockRegex = /\[添付ファイル: (.*?)\]\n```\n(?:[\s\S]*?)\n```\n?\s*/g;
+
             conversationHistory.forEach(message => {
-                const textParts = message.parts.filter(p => p.text);
                 const fileParts = message.parts.filter(p => p.inlineData);
-                const combinedText = textParts.map(p => p.text).join('\n\n');
-                
-                addMessageToDisplay(message.role, combinedText, fileParts);
+                const textParts = message.parts.filter(p => p.text);
+                let combinedText = textParts.map(p => p.text).join('\n\n');
+
+                if (message.role === 'user') {
+                    const reconstructedFiles = [...fileParts]; // 画像などの履歴はそのまま保持
+
+                    // テキストからファイル表現をパースし、ファイル情報を抽出
+                    const cleanedText = combinedText.replace(fileBlockRegex, (match, fileName) => {
+                        reconstructedFiles.push({
+                            name: fileName,
+                            isReconstructed: true, // 履歴から復元された印
+                        });
+                        return ''; // マッチした部分をテキストから削除
+                    }).trim();
+
+                    addMessageToDisplay(message.role, cleanedText, reconstructedFiles);
+
+                } else { // 'model' role
+                    addMessageToDisplay(message.role, combinedText, fileParts);
+                }
             });
 
             if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {

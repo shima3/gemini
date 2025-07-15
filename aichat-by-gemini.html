@@ -339,8 +339,8 @@
         ];
 
 
-        function getFormattedTimestamp() {
-            const now = new Date();
+        function getFormattedTimestamp(date = new Date()) {
+            const now = date;
             const y = now.getFullYear();
             const m = String(now.getMonth() + 1).padStart(2, '0');
             const d = String(now.getDate()).padStart(2, '0');
@@ -418,7 +418,6 @@
 
                 const model = genAI.getGenerativeModel({
                     model: modelName,
-                    // systemInstruction: "あなたはWebデザインとコーディングを支援するAIです。ユーザーから図形やグラフの描画を指示された場合は、必ずSVGコードを生成し、そのコードブロックの言語指定を ```svg として応答してください。他の形式（xmlなど）は使用しないでください。また、数式を記述する際は、必ずLaTeX形式（インラインは`$...$`、ブロックは`$$...$$`）を使用してください。",
                     systemInstruction: "ユーザーから図形やグラフの描画を指示された場合は、必ずSVGコードを生成し、そのコードブロックの言語指定を ```svg として応答してください。他の形式（xmlなど）は使用しないでください。また、数式を記述する際は、必ずLaTeX形式（インラインは`$...$`、ブロックは`$$...$$`）を使用してください。",
                 });
                 
@@ -537,6 +536,7 @@
         }
         
         function addMessageToDisplay(sender, text, files = []) {
+            const messageDate = new Date();
             const messageRow = document.createElement('div');
             messageRow.classList.add('message-row', sender === 'user' ? 'user' : 'ai');
 
@@ -547,7 +547,7 @@
             contentEl.classList.add('message-content');
             
             if (sender === 'model') {
-                renderFormattedContent(contentEl, text);
+                renderFormattedContent(contentEl, text, messageDate);
             } else { // 'user'
                 if (text) {
                     contentEl.appendChild(document.createTextNode(text));
@@ -589,7 +589,7 @@
             
             const timestampEl = document.createElement('div');
             timestampEl.classList.add('message-timestamp');
-            timestampEl.textContent = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+            timestampEl.textContent = messageDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
             
             messageEl.appendChild(contentEl);
             messageRow.appendChild(messageEl);
@@ -605,7 +605,7 @@
             }
         }
 
-        function renderFormattedContent(container, text) {
+        function renderFormattedContent(container, text, messageDate) {
             const fileBlockRegex = /\[添付ファイル: (.*?)\]\n```([\s\S]*?)```/g;
             const codeBlockRegex = /```(\w*)\n([\s\S]*?)\n```/g;
             let lastIndex = 0;
@@ -633,10 +633,10 @@
                         svgContainer.style.cssText = 'background: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; margin: 1em 0;';
                         container.appendChild(svgContainer);
                     } else {
-                        renderAsCodeBlock(container, code, 'xml');
+                        renderAsCodeBlock(container, code, 'xml', messageDate);
                     }
                 } else {
-                    renderAsCodeBlock(container, code, language);
+                    renderAsCodeBlock(container, code, language, messageDate);
                 }
                 lastIndex = codeBlockRegex.lastIndex;
             }
@@ -646,7 +646,7 @@
             }
         }
 
-        function renderAsCodeBlock(container, code, language) {
+        function renderAsCodeBlock(container, code, language, messageDate) {
             const wrapper = document.createElement('div');
             wrapper.className = 'code-block-wrapper';
             const header = document.createElement('div');
@@ -661,7 +661,7 @@
             copyBtn.onclick = () => handleCopyClick(code);
             const downloadBtn = document.createElement('button');
             downloadBtn.textContent = 'Download';
-            downloadBtn.onclick = () => handleDownloadClick(code, language);
+            downloadBtn.onclick = () => handleDownloadClick(code, language, messageDate);
             actions.appendChild(copyBtn);
             actions.appendChild(downloadBtn);
             header.appendChild(langName);
@@ -737,6 +737,9 @@
                 const fileParts = message.parts.filter(p => p.inlineData);
                 const combinedText = textParts.map(p => p.text).join('\n\n');
                 
+                // For rebuilt history, we can't know the original timestamp.
+                // We could use a placeholder or the current time.
+                // For simplicity, we'll behave as if it's a new message.
                 addMessageToDisplay(message.role, combinedText, fileParts);
             });
 
@@ -748,14 +751,14 @@
 
         function handleCopyClick(code) { navigator.clipboard.writeText(code).then(() => showToast("コピーしました！")); }
         
-        function handleDownloadClick(code, language) {
+        function handleDownloadClick(code, language, messageDate) {
             const langMap = { 'javascript': 'js', 'python': 'py', 'html': 'html', 'css': 'css', 'java': 'java', 'csharp': 'cs', 'cpp': 'cpp', 'ruby': 'rb', 'go': 'go', 'shell': 'sh', 'bash': 'sh', 'json': 'json', 'sql': 'sql', 'typescript': 'ts', 'xml': 'xml', 'yaml': 'yaml', 'svg': 'svg' };
             const extension = langMap[language.toLowerCase()] || 'txt';
             const blob = new Blob([code], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `code-${getFormattedTimestamp()}.${extension}`;
+            a.download = `code-${getFormattedTimestamp(messageDate)}.${extension}`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

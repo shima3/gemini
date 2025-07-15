@@ -338,18 +338,6 @@
             'sql', 'log', 'ini', 'toml', 'yaml', 'yml', 'svg', 'go', 'php', 'swift'
         ];
 
-
-        function getFormattedTimestamp(date = new Date()) {
-            const now = date;
-            const y = now.getFullYear();
-            const m = String(now.getMonth() + 1).padStart(2, '0');
-            const d = String(now.getDate()).padStart(2, '0');
-            const h = String(now.getHours()).padStart(2, '0');
-            const min = String(now.getMinutes()).padStart(2, '0');
-            const s = String(now.getSeconds()).padStart(2, '0');
-            return `${y}${m}${d}-${h}${min}${s}`;
-        }
-
         function initializeApp() {
             settingsToggleBtn.addEventListener('click', () => settingsContainer.classList.toggle('hidden'));
             apiKeyInput.addEventListener('change', saveAndReinitializeChat);
@@ -693,7 +681,13 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `gemini-chat-history-${getFormattedTimestamp()}.json`;
+                
+                const now = new Date();
+                const y = now.getFullYear();
+                const m = String(now.getMonth() + 1).padStart(2, '0');
+                const d = String(now.getDate()).padStart(2, '0');
+                a.download = `gemini-chat-history-${y}${m}${d}.json`;
+
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -737,9 +731,6 @@
                 const fileParts = message.parts.filter(p => p.inlineData);
                 const combinedText = textParts.map(p => p.text).join('\n\n');
                 
-                // For rebuilt history, we can't know the original timestamp.
-                // We could use a placeholder or the current time.
-                // For simplicity, we'll behave as if it's a new message.
                 addMessageToDisplay(message.role, combinedText, fileParts);
             });
 
@@ -758,7 +749,11 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `code-${getFormattedTimestamp(messageDate)}.${extension}`;
+
+            const h = String(messageDate.getHours()).padStart(2, '0');
+            const min = String(messageDate.getMinutes()).padStart(2, '0');
+            a.download = `code-${h}${min}.${extension}`;
+            
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

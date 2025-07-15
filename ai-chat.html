@@ -169,11 +169,7 @@
         .file-display-item { display: inline-flex; align-items: center; gap: 8px; background-color: rgba(0, 0, 0, 0.05); padding: 6px 12px; border-radius: 16px; font-size: 0.9em; }
         .file-display-item svg { width: 16px; height: 16px; fill: #555; flex-shrink: 0; }
 
-        #loading-indicator {
-            align-self: flex-start;
-            padding: 0 20px;
-            margin-bottom: 10px;
-        }
+        /* Loading Indicator Styles */
         .typing-indicator-bubble {
             background-color: var(--ai-message-bg);
             border-radius: 18px;
@@ -317,7 +313,7 @@
 
         <div id="chat-container">
             <div id="chat-history"></div>
-            <div id="loading-indicator" class="loading-indicator" style="display: none;"></div>
+            <!-- Loading indicator is now controlled by JavaScript -->
             <form id="chat-form">
                 <div id="chat-form-container">
                     <div id="input-wrapper">
@@ -352,7 +348,6 @@
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
         const errorMessageDiv = document.getElementById('error-message');
-        const loadingIndicator = document.getElementById('loading-indicator');
         const fileInput = document.getElementById('file-input');
         const fileInputLabel = document.getElementById('file-input-label');
         const filePreview = document.getElementById('file-preview');
@@ -366,6 +361,7 @@
         let chat;
         let conversationHistory = []; // Used only for initializing chat
         let attachedFiles = [];
+        let loadingIndicator;
 
         const TEXT_MIME_TYPES = ['application/json', 'application/xml', 'application/javascript', 'application/csv', 'application/x-sh'];
         const TEXT_EXTENSIONS = [
@@ -399,11 +395,17 @@
             downloadHistoryBtn.addEventListener('click', handleDownloadHistory);
             uploadHistoryInput.addEventListener('change', handleUploadHistory);
             
+            // Create loading indicator dynamically
+            loadingIndicator = document.createElement('div');
+            loadingIndicator.id = 'loading-indicator';
             loadingIndicator.innerHTML = `
-                <div class="typing-indicator-bubble">
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
-                    <div class="typing-dot"></div>
+                <div class="message-row ai">
+                    <div class="typing-indicator-bubble">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                    <div class="message-timestamp">&nbsp;</div>
                 </div>
             `;
 
@@ -486,10 +488,14 @@
             fileInput.disabled = true;
             fileInputLabel.style.cssText = 'cursor: not-allowed; opacity: 0.5;';
             document.querySelectorAll('.remove-file').forEach(btn => btn.style.display = 'none');
-            loadingIndicator.style.display = 'flex';
             
             const filesToSend = [...attachedFiles];
             addMessageToDisplay('user', userInput, filesToSend);
+
+            // Append loading indicator to chat history
+            chatHistory.appendChild(loadingIndicator);
+            loadingIndicator.style.display = 'block';
+            chatHistory.scrollTop = chatHistory.scrollHeight;
 
             try {
                 const filePromises = filesToSend.map(file => {
@@ -537,7 +543,11 @@
                 messageInput.disabled = false;
                 fileInput.disabled = false;
                 fileInputLabel.style.cssText = 'cursor: pointer; opacity: 1;';
-                loadingIndicator.style.display = 'none';
+
+                // Remove loading indicator from chat history
+                if (loadingIndicator.parentNode) {
+                    loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
                 
                 attachedFiles = [];
                 renderFilePreview();

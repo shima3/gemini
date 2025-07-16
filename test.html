@@ -1,0 +1,15 @@
+<form>
+  <input type="text" name="username" autocomplete="username" />
+  <input type="password" name="password" autocomplete="current-password" />
+  <button type="submit">保存</button>
+</form>
+<script>
+  const params = new URLSearchParams(window.location.search);
+
+  // パラメータを1つずつ取得
+  const username = params.get('username');
+  const password = params.get('password');
+
+  console.log(username);
+  console.log(password);
+</script>

@@ -615,7 +615,7 @@
                         if (loadedData.model) {
                             modelInput.value = loadedData.model;
                             updateAppTitle();
-                            showToast(`モデルが「${loadedData.model}」に更新されました。「設定を適用」してください。`);
+                            showToast(`モデルが「${loadedData.model}」に更新されました。「適用」を押してください。`);
                         }
                     } else if (Array.isArray(loadedData)) {
                         newHistory = loadedData; newTimestamps = newHistory.map(() => new Date().toISOString());
@@ -790,7 +790,7 @@
             } else {
                 // APIキーがなければ、設定画面を表示
                 settingsForm.classList.remove('hidden');
-                displayError("APIキーが設定されていません。設定画面でAPIキーとモデル名を入力し、「設定を適用」ボタンを押してください。");
+                displayError("APIキーが設定されていません。設定画面でAPIキーとモデル名を入力し、「適用」を押してください。");
                 chatContainer.style.display = 'none';
             }
         }

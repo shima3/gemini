@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高機能チャットUI - プロトタイプ v1</title>
+    <title>高機能チャットUI - プロトタイプ v1.1</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -36,10 +36,7 @@
             align-items: center;
             flex-shrink: 0;
         }
-        header h1 {
-            margin: 0;
-            font-size: 1.2em;
-        }
+        header h1 { margin: 0; font-size: 1.2em; }
         button {
             background-color: var(--primary-color);
             color: white;
@@ -50,13 +47,8 @@
             font-size: 0.9em;
             transition: background-color 0.3s;
         }
-        button:hover {
-            background-color: #45a049;
-        }
-        button:disabled {
-            background-color: var(--disabled-color);
-            cursor: not-allowed;
-        }
+        button:hover { background-color: #45a049; }
+        button:disabled { background-color: var(--disabled-color); cursor: not-allowed; }
         #settings-area {
             background-color: var(--secondary-color);
             padding: 15px;
@@ -95,10 +87,7 @@
         }
         .message-container.user .message-bubble { background-color: var(--user-msg-bg); border-top-right-radius: 5px; }
         .message-container.ai .message-bubble { background-color: var(--ai-msg-bg); border-top-left-radius: 5px; }
-        .message-bubble .content {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
+        .message-bubble .content { word-wrap: break-word; }
         .message-bubble .content p:first-child { margin-top: 0; }
         .message-bubble .content p:last-child { margin-bottom: 0; }
         .message-time {
@@ -107,24 +96,14 @@
             margin-top: 5px;
             padding: 0 5px;
         }
-        .typing-indicator {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
+        .typing-indicator { display: flex; align-items: center; gap: 5px; }
         .typing-indicator span {
-            width: 8px;
-            height: 8px;
-            background-color: #9e9e9e;
-            border-radius: 50%;
+            width: 8px; height: 8px; background-color: #9e9e9e; border-radius: 50%;
             animation: bounce 1.4s infinite ease-in-out both;
         }
         .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
         .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes bounce {
-            0%, 80%, 100% { transform: scale(0); }
-            40% { transform: scale(1.0); }
-        }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
         footer {
             padding: 10px 20px;
             border-top: 1px solid var(--border-color);
@@ -133,101 +112,46 @@
         }
         .input-area { display: flex; align-items: flex-end; gap: 10px; }
         .input-area textarea {
-            flex-grow: 1;
-            padding: 10px;
-            border-radius: 5px;
-            border: 1px solid var(--border-color);
-            background-color: var(--input-bg);
-            color: var(--text-color);
-            font-size: 1em;
-            resize: none;
-            max-height: 200px;
-            overflow-y: auto;
-            line-height: 1.5;
+            flex-grow: 1; padding: 10px; border-radius: 5px; border: 1px solid var(--border-color);
+            background-color: var(--input-bg); color: var(--text-color); font-size: 1em;
+            resize: none; max-height: 200px; overflow-y: auto; line-height: 1.5;
         }
 
         /* Markdown and Highlight.js Styles */
         .message-bubble pre {
-            background-color: #1e1e1e;
-            padding: 0;
-            border-radius: 8px;
-            overflow: hidden;
-            position: relative;
+            background-color: #1e1e1e; padding: 0; border-radius: 8px;
+            overflow: hidden; position: relative;
         }
         .code-header {
-            background-color: #333;
-            padding: 5px 10px;
-            font-size: 0.8em;
-            color: #ccc;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            background-color: #333; padding: 5px 10px; font-size: 0.8em;
+            color: #ccc; display: flex; justify-content: space-between; align-items: center;
         }
-        .code-header button {
-            background: none;
-            border: none;
-            color: #ccc;
-            cursor: pointer;
-            padding: 2px 5px;
-            font-size: 0.9em;
-        }
-        .code-header button:hover {
-            color: white;
-        }
+        .code-header button { background: none; border: none; color: #ccc; cursor: pointer; padding: 2px 5px; font-size: 0.9em; }
+        .code-header button:hover { color: white; }
         .message-bubble pre code.hljs {
-            padding: 15px;
-            display: block;
-            overflow-x: auto;
-            white-space: pre-wrap; /* Wrap long lines */
-            word-break: break-all; /* Force break long words/tokens */
+            padding: 15px; display: block; overflow-x: auto;
+            white-space: pre-wrap; word-break: break-all;
         }
         .message-bubble code:not(pre code) {
-            background-color: rgba(255, 255, 255, 0.1);
-            padding: 0.2em 0.4em;
-            margin: 0;
-            font-size: 85%;
-            border-radius: 3px;
+            background-color: rgba(255, 255, 255, 0.1); padding: 0.2em 0.4em;
+            margin: 0; font-size: 85%; border-radius: 3px;
         }
-        .message-bubble svg {
-            max-width: 100%;
-            height: auto;
-            background: white;
-            padding: 10px;
-            border-radius: 8px;
+        .message-bubble .svg-container {
+            background: white; padding: 10px; border-radius: 8px;
+            line-height: 0; /* Fix extra space below SVG */
         }
-
-        /* Default highlight.js theme (vs2015) override for dark mode */
-        .hljs{color:#dcdcdc;background:#1e1e1e}
-        .hljs-keyword,.hljs-literal,.hljs-symbol,.hljs-name{color:#569cd6}
-        .hljs-link{color:#569cd6;text-decoration:underline}
-        .hljs-built_in,.hljs-type{color:#4ec9b0}
-        .hljs-number,.hljs-class{color:#b5cea8}
-        .hljs-string,.hljs-meta-string{color:#d69d85}
-        .hljs-regexp,.hljs-template-tag{color:#9a5334}
-        .hljs-subst,.hljs-function,.hljs-title,.hljs-params,.hljs-formula{color:#dcdcdc}
-        .hljs-comment,.hljs-quote{color:#6a9955;font-style:italic}
-        .hljs-doctag{color:#608b4e}
-        .hljs-meta,.hljs-meta-keyword,.hljs-tag{color:#9b9b9b}
-        .hljs-variable,.hljs-template-variable{color:#bd63c5}
-        .hljs-attr,.hljs-attribute{color:#9cdcfe}
-        .hljs-section{color:gold}
-        .hljs-emphasis{font-style:italic}
-        .hljs-strong{font-weight:700}
-        .hljs-bullet,.hljs-selector-tag,.hljs-selector-id,.hljs-selector-class,.hljs-selector-attr,.hljs-selector-pseudo{color:#d7ba7d}
-        .hljs-addition{background-color:#144212;display:inline-block;width:100%}
-        .hljs-deletion{background-color:#600;display:inline-block;width:100%}
+        .message-bubble .svg-container svg {
+            max-width: 100%; height: auto; display: block;
+        }
+        .hljs{color:#dcdcdc;background:#1e1e1e}.hljs-keyword,.hljs-literal,.hljs-symbol,.hljs-name{color:#569cd6}.hljs-link{color:#569cd6;text-decoration:underline}.hljs-built_in,.hljs-type{color:#4ec9b0}.hljs-number,.hljs-class{color:#b5cea8}.hljs-string,.hljs-meta-string{color:#d69d85}.hljs-regexp,.hljs-template-tag{color:#9a5334}.hljs-subst,.hljs-function,.hljs-title,.hljs-params,.hljs-formula{color:#dcdcdc}.hljs-comment,.hljs-quote{color:#6a9955;font-style:italic}.hljs-doctag{color:#608b4e}.hljs-meta,.hljs-meta-keyword,.hljs-tag{color:#9b9b9b}.hljs-variable,.hljs-template-variable{color:#bd63c5}.hljs-attr,.hljs-attribute{color:#9cdcfe}.hljs-section{color:gold}.hljs-emphasis{font-style:italic}.hljs-strong{font-weight:700}.hljs-bullet,.hljs-selector-tag,.hljs-selector-id,.hljs-selector-class,.hljs-selector-attr,.hljs-selector-pseudo{color:#d7ba7d}.hljs-addition{background-color:#144212;display:inline-block;width:100%}.hljs-deletion{background-color:#600;display:inline-block;width:100%}
     </style>
     <!-- External Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/@google/generative-ai@0.14.0/dist/index.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
+    <!-- [FIXED] Changed from common.min.js to highlight.min.js -->
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
     <script>
-        // MathJax Configuration
         window.MathJax = {
-            tex: {
-                inlineMath: [['$', '$'], ['\\(', '\\)']],
-                displayMath: [['$$', '$$'], ['\\[', '\\]']]
-            },
+            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
             svg: { fontCache: 'global' }
         };
     </script>
@@ -235,7 +159,7 @@
 </head>
 <body>
     <header>
-        <h1>高機能チャットUI - v1</h1>
+        <h1>高機能チャットUI - v1.1</h1>
         <button id="settings-toggle-btn">設定</button>
     </header>
 
@@ -248,9 +172,7 @@
     </section>
 
     <main id="main-content">
-        <div id="chat-history">
-            <!-- Messages will be appended here -->
-        </div>
+        <div id="chat-history"></div>
     </main>
 
     <footer>
@@ -261,7 +183,8 @@
     </footer>
 
     <script type="module">
-        const { GoogleGenerativeAI } = google;
+        // [FIXED] Import GoogleGenerativeAI directly using ES Modules syntax
+        import { GoogleGenerativeAI } from "https://cdn.jsdelivr.net/npm/@google/generative-ai@0.14.0/dist/index.min.js";
 
         // DOM Elements
         const settingsToggleBtn = document.getElementById('settings-toggle-btn');
@@ -269,8 +192,7 @@
         const settingsForm = document.getElementById('settings-form');
         const modelNameInput = document.getElementById('model-name-input');
         const apiKeyInput = document.getElementById('api-key-input');
-        const applySettingsBtn = document.getElementById('apply-settings-btn');
-        const chatHistory = document.getElementById('chat-history');
+        const chatHistoryEl = document.getElementById('chat-history');
         const messageInput = document.getElementById('message-input');
         const sendBtn = document.getElementById('send-btn');
         const mainContent = document.getElementById('main-content');
@@ -278,12 +200,10 @@
         let genAI;
         let generativeModel;
         let chat;
-        let chatHistoryArray = [];
-
+        
         // --- Core Application Logic ---
 
         function initializeApp() {
-            // Load settings from URL params if available
             const urlParams = new URLSearchParams(window.location.search);
             const apiKey = urlParams.get('apiKey');
             const modelName = urlParams.get('modelName') || 'gemini-1.5-pro-latest';
@@ -297,7 +217,6 @@
                 showSettingsAndLockUI();
             }
 
-            // Event Listeners
             settingsToggleBtn.addEventListener('click', () => settingsArea.classList.toggle('hidden'));
             settingsForm.addEventListener('submit', (e) => {
                 e.preventDefault();
@@ -337,12 +256,11 @@
                 generativeModel = genAI.getGenerativeModel({ model: modelName, systemInstruction });
                 chat = generativeModel.startChat({ history: [] });
                 
-                chatHistory.innerHTML = '';
+                chatHistoryEl.innerHTML = '';
                 addMessageToHistory('ai', `<p>AIとの接続が確立しました。モデル: <strong>${modelName}</strong></p>`);
                 setUIState(true);
                 settingsArea.classList.add('hidden');
 
-                // Update URL for easy sharing/reloading
                 const url = new URL(window.location);
                 url.searchParams.set('apiKey', apiKey);
                 url.searchParams.set('modelName', modelName);
@@ -350,7 +268,6 @@
 
             } catch (error) {
                 console.error("Initialization failed:", error);
-                alert(`初期化に失敗しました: ${error.message}`);
                 showSettingsAndLockUI(`初期化エラー: ${error.message}`);
             }
         }
@@ -362,7 +279,7 @@
             setUIState(false);
             addMessageToHistory('user', prompt);
             messageInput.value = '';
-            messageInput.style.height = 'auto'; // Reset height
+            messageInput.style.height = 'auto';
 
             const aiMessageBubble = addMessageToHistory('ai', '', true); // Add placeholder
             
@@ -406,9 +323,11 @@
                 indicator.innerHTML = '<span></span><span></span><span></span>';
                 contentDiv.appendChild(indicator);
             } else if (role === 'user') {
-                contentDiv.textContent = text;
+                const p = document.createElement('p');
+                p.textContent = text;
+                contentDiv.appendChild(p);
             } else {
-                contentDiv.innerHTML = text; // Assumes safe HTML from trusted source or post-processing
+                contentDiv.innerHTML = text;
             }
 
             const timeDiv = document.createElement('div');
@@ -418,7 +337,7 @@
             messageBubble.appendChild(contentDiv);
             messageContainer.appendChild(messageBubble);
             messageContainer.appendChild(timeDiv);
-            chatHistory.appendChild(messageContainer);
+            chatHistoryEl.appendChild(messageContainer);
             mainContent.scrollTop = mainContent.scrollHeight;
             
             return messageBubble;
@@ -426,7 +345,6 @@
 
         function updateAIMessage(messageBubble, text) {
             const contentDiv = messageBubble.querySelector('.content');
-            // Use a temporary div to render markdown to avoid re-rendering the whole thing constantly
             contentDiv.innerHTML = marked.parse(text);
             mainContent.scrollTop = mainContent.scrollHeight;
         }
@@ -437,11 +355,12 @@
                 contentDiv.innerHTML = `<p style="color: #ff8a80;">${finalResponse}</p>`;
             } else {
                 contentDiv.innerHTML = renderRichContent(finalResponse);
-                // Apply syntax highlighting
                 contentDiv.querySelectorAll('pre code').forEach((block) => {
-                    hljs.highlightElement(block);
+                    // SVG code blocks are not highlighted to avoid issues
+                    if (!block.parentElement.classList.contains('svg-container')) {
+                        hljs.highlightElement(block);
+                    }
                 });
-                // Re-render MathJax for the new content
                 if (window.MathJax) {
                     MathJax.typesetPromise([contentDiv]);
                 }
@@ -451,42 +370,48 @@
 
         // --- Rich Content Rendering (Markdown, Code, SVG, LaTeX) ---
         
-        const markedRenderer = new marked.Renderer();
-        markedRenderer.code = (code, language) => {
-            // ** SVG rendering logic **
+        const renderer = new marked.Renderer();
+        renderer.code = (code, language) => {
             if (language === 'svg') {
+                // Return the raw SVG code wrapped in a container for styling
                 return `<div class="svg-container">${code}</div>`;
             }
             
-            // Standard code block with header
             const validLang = hljs.getLanguage(language) ? language : 'plaintext';
             const highlightedCode = hljs.highlight(code, { language: validLang, ignoreIllegals: true }).value;
 
-            // Adding a header to the code block for language name
-            return `
-                <pre>
-                    <div class="code-header">
-                        <span>${validLang}</span>
-                        <div>
-                            <button onclick="navigator.clipboard.writeText(this.closest('pre').querySelector('code').textContent)">コピー</button>
-                        </div>
+            // Using TextNode for code to prevent re-parsing by clipboard function
+            const codeNode = document.createElement('code');
+            codeNode.className = `hljs ${validLang}`;
+            codeNode.innerHTML = highlightedCode;
+
+            const pre = document.createElement('pre');
+            pre.innerHTML = `
+                <div class="code-header">
+                    <span>${validLang}</span>
+                    <div>
+                        <button title="Copy code">コピー</button>
                     </div>
-                    <code class="hljs ${validLang}">${highlightedCode}</code>
-                </pre>
-            `;
+                </div>`;
+            pre.appendChild(codeNode);
+
+            // Add copy functionality
+            pre.querySelector('button').addEventListener('click', () => {
+                navigator.clipboard.writeText(code);
+                // You can add a toast notification here later
+            });
+
+            return pre.outerHTML;
         };
+
         marked.setOptions({
-            renderer: markedRenderer,
+            renderer: renderer,
             gfm: true,
             breaks: true,
             pedantic: false,
-            smartLists: true,
-            smartypants: false
         });
 
         function renderRichContent(text) {
-            // Marked will handle code blocks (including SVG) and other markdown.
-            // MathJax will handle LaTeX expressions after marked has run.
             return marked.parse(text);
         }
 
@@ -500,10 +425,8 @@
         }
         
         function handleInput() {
-            // Auto-resize textarea
             this.style.height = 'auto';
             this.style.height = (this.scrollHeight) + 'px';
-            // Enable/disable send button
             sendBtn.disabled = this.value.trim() === '' || messageInput.disabled;
         }
 

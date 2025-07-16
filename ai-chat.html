@@ -80,13 +80,18 @@
 
         header h1 { margin: 0; font-size: 1.2em; }
         #settings-toggle { background: none; border: 1px solid white; color: white; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8em; }
-        #settings-container { padding: 20px; border-bottom: 1px solid var(--border-color); }
-        #settings-container.hidden { display: none; }
+        
+        /* 変更点: formになったため、paddingを内部の要素に移動 */
+        #settings-form { border-bottom: 1px solid var(--border-color); }
+        #settings-form.hidden { display: none; }
+        .settings-content { padding: 20px; }
+
         .settings-grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
-        @media (min-width: 600px) { .settings-grid { grid-template-columns: 1fr 1fr; gap: 20px; } }
+        @media (min-width: 600px) { .settings-grid { grid-template-columns: 1fr 1fr; } }
         .form-group { display: flex; flex-direction: column; }
         .form-group label { margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
         .form-group input { padding: 10px; border: 1px solid var(--border-color); border-radius: 5px; font-size: 1em; }
+        .apply-settings-wrapper { text-align: right; margin-top: 20px; }
         
         #chat-container {
             display: flex;
@@ -251,36 +256,46 @@
             <button id="settings-toggle">設定</button>
         </header>
 
-        <div id="settings-container" class="hidden">
-            <div class="settings-grid">
-                <div class="form-group">
-                    <label for="api-key">APIキー</label>
-                    <input type="password" id="api-key" placeholder="Google AI Studioで取得したキー">
+        <!-- ★ 変更点: div#settings-container を form#settings-form に変更 -->
+        <form id="settings-form" class="hidden">
+            <div class="settings-content">
+                <div class="settings-grid">
+                    <div class="form-group">
+                        <label for="model-input">モデル</label>
+                        <!-- name属性を追加 -->
+                        <input type="text" id="model-input" name="model" placeholder="例: gemini-2.5-pro">
+                    </div>
+                    <div class="form-group">
+                        <label for="api-key">APIキー</label>
+                        <!-- name属性を追加 -->
+                        <input type="password" id="api-key" name="apiKey" placeholder="Google AI Studioで取得したキー">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="model-input">モデル</label>
-                    <input type="text" id="model-input" placeholder="例: gemini-1.5-pro-latest">
+                <!-- 設定適用ボタンを追加 -->
+                <div class="apply-settings-wrapper">
+                    <button type="submit" class="history-buttons button-label" style="background-color: var(--primary-color); color: white; border: none; padding: 10px 20px;">適用</button>
+                </div>
+                <div class="api-key-guide">
+                    <h4>APIキーの取得方法</h4>
+                    <ol>
+                        <li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a> にアクセスします。</li>
+                        <li>「Create API key」ボタンをクリックして新しいキーを作成します。</li>
+                        <li>生成されたキーをコピーし、上のAPIキー入力欄に貼り付けてください。</li>
+                    </ol>
+                    <p style="font-size: 0.85em; color: #666; margin-top: 10px; margin-bottom: 0;">※APIキーはURLのパラメータとして扱われます。このURLを他人と共有しないようご注意ください。</p>
+                </div>
+                <div class="history-management">
+                    <h4>対話履歴の管理</h4>
+                    <div class="history-buttons">
+                        <!-- type="button" を追加してフォーム送信を抑制 -->
+                        <button id="download-history-btn" type="button">履歴をダウンロード</button>
+                        <label for="upload-history-input" class="button-label">履歴をアップロード</label>
+                        <input type="file" id="upload-history-input" accept=".json,application/json" style="display: none;">
+                    </div>
+                    <p style="font-size: 0.85em; color: #666; margin-top: 10px; margin-bottom: 0;">※現在の対話履歴をJSONファイルとして保存・読み込みできます。アップロードすると現在の履歴は上書きされます。</p>
                 </div>
             </div>
-            <div class="api-key-guide">
-                <h4>APIキーの取得方法</h4>
-                <ol>
-                    <li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a> にアクセスします。</li>
-                    <li>「Create API key」ボタンをクリックして新しいキーを作成します。</li>
-                    <li>生成されたキーをコピーし、上のAPIキー入力欄に貼り付けてください。</li>
-                </ol>
-                <p style="font-size: 0.85em; color: #666; margin-top: 10px; margin-bottom: 0;">※APIキーはブラウザのローカルストレージに保存され、このページ以外からアクセスされることはありません。</p>
-            </div>
-            <div class="history-management">
-                <h4>対話履歴の管理</h4>
-                <div class="history-buttons">
-                    <button id="download-history-btn">履歴をダウンロード</button>
-                    <label for="upload-history-input" class="button-label">履歴をアップロード</label>
-                    <input type="file" id="upload-history-input" accept=".json,application/json" style="display: none;">
-                </div>
-                <p style="font-size: 0.85em; color: #666; margin-top: 10px; margin-bottom: 0;">※現在の対話履歴をJSONファイルとして保存・読み込みできます。アップロードすると現在の履歴は上書きされます。</p>
-            </div>
-        </div>
+        </form>
 
         <div id="error-message"></div>
 
@@ -314,7 +329,7 @@
         let codeBlockIdCounter = 0;
 
         // DOM Elements
-        const settingsContainer = document.getElementById('settings-container');
+        const settingsForm = document.getElementById('settings-form'); // ★変更点: settings-containerから変更
         const settingsToggleBtn = document.getElementById('settings-toggle');
         const apiKeyInput = document.getElementById('api-key');
         const modelInput = document.getElementById('model-input');
@@ -358,7 +373,6 @@
             addMessageToDisplay('model', welcomeText, [], timestamp);
         }
         
-        // ★★★ この関数が新しい安定版のレンダリング処理です ★★★
         function renderFormattedContent(container, text) {
             const placeholders = new Map();
             let placeholderId = 0;
@@ -481,24 +495,11 @@
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
 
-        function saveAndReinitializeChat() {
-            const apiKey = apiKeyInput.value.trim();
-            const modelName = modelInput.value.trim();
-            if (!apiKey) { displayError("APIキーを入力してください。"); return; }
-            if (!modelName) { displayError("モデル名を入力してください。"); return; }
-            localStorage.setItem('geminiApiKey', apiKey);
-            localStorage.setItem('geminiModel', modelName);
-            clearError();
-            conversationHistory = [];
-            messageTimestamps = [];
-            chatHistory.innerHTML = '';
-            displayInitialWelcomeMessage(); 
-            updateAppTitle();
-            setupChat();
-            settingsContainer.classList.add('hidden');
-        }
+        // ★ 変更点: localStorageへの保存処理は不要になったため、この関数は削除
+        // function saveAndReinitializeChat() { ... }
         
         function setupChat() {
+            // ★ 変更点: apiKeyはinputから直接取得 (initializeAppでURLから設定済み)
             const apiKey = apiKeyInput.value.trim();
             if (!apiKey) { displayError("APIキーが設定されていません。"); chatContainer.style.display = 'none'; return; }
             try {
@@ -610,14 +611,20 @@
                     if (loadedData.version === "1.0" && Array.isArray(loadedData.history)) {
                         newHistory = loadedData.history.map(entry => { const { timestamp, ...rest } = entry; return rest; });
                         newTimestamps = loadedData.history.map(entry => entry.timestamp);
-                        if (loadedData.model) { modelInput.value = loadedData.model; localStorage.setItem('geminiModel', loadedData.model); updateAppTitle(); }
+                        // ★ 変更点: localStorageへの保存を削除し、ユーザーに設定適用を促す
+                        if (loadedData.model) {
+                            modelInput.value = loadedData.model;
+                            updateAppTitle();
+                            showToast(`モデルが「${loadedData.model}」に更新されました。「設定を適用」してください。`);
+                        }
                     } else if (Array.isArray(loadedData)) {
                         newHistory = loadedData; newTimestamps = newHistory.map(() => new Date().toISOString());
                     } else { throw new Error("無効な履歴ファイル形式です。"); }
                     conversationHistory = newHistory;
                     messageTimestamps = [new Date().toISOString(), ...newTimestamps];
                     rebuildChatDisplay(conversationHistory, messageTimestamps);
-                    setupChat(); settingsContainer.classList.add('hidden');
+                    setupChat(); 
+                    settingsForm.classList.add('hidden');
                     showToast("履歴をアップロードしました。");
                 } catch (error) { displayError(`履歴の読み込みに失敗しました: ${error.message}`); } finally { event.target.value = ''; }
             };
@@ -665,7 +672,7 @@
         
         function showToast(message) {
             toastNotification.textContent = message; toastNotification.classList.add('show');
-            setTimeout(() => { toastNotification.classList.remove('show'); }, 2000);
+            setTimeout(() => { toastNotification.classList.remove('show'); }, 3000); // 少し長めに表示
         }
 
         function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
@@ -692,7 +699,7 @@
             });
         }
 
-        function displayError(message) { errorMessageDiv.textContent = message; errorMessageDiv.style.display = 'block'; }
+        function displayError(message) { errorMessageDiv.innerHTML = message; errorMessageDiv.style.display = 'block'; }
         
         function clearError() { errorMessageDiv.textContent = ''; errorMessageDiv.style.display = 'none'; }
         
@@ -705,9 +712,28 @@
                 marked.setOptions({ gfm: true, breaks: true, mangle: false, headerIds: false });
             }
 
-            settingsToggleBtn.addEventListener('click', () => settingsContainer.classList.toggle('hidden'));
-            apiKeyInput.addEventListener('change', saveAndReinitializeChat);
-            modelInput.addEventListener('change', saveAndReinitializeChat);
+            // ★ 変更点: 設定フォームのsubmitイベントを処理
+            settingsForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const apiKey = apiKeyInput.value.trim();
+                const model = modelInput.value.trim();
+                if (!apiKey || !model) {
+                    displayError("APIキーとモデル名を両方入力してください。");
+                    return;
+                }
+                const newUrlParams = new URLSearchParams();
+                newUrlParams.set('model', model);
+                newUrlParams.set('apiKey', apiKey);
+                // ページをリロードして新しい設定を適用
+                window.location.search = newUrlParams.toString();
+            });
+
+            settingsToggleBtn.addEventListener('click', () => settingsForm.classList.toggle('hidden'));
+            
+            // ★ 変更点: inputのchangeイベントリスナーは不要なので削除
+            // apiKeyInput.addEventListener('change', ...);
+            // modelInput.addEventListener('change', ...);
+
             chatForm.addEventListener('submit', handleChatSubmit);
             messageInput.addEventListener('input', autoResizeTextarea);
             messageInput.addEventListener('keydown', handleKeyDown);
@@ -744,18 +770,27 @@
                 </div>
             `;
 
-            const savedApiKey = localStorage.getItem('geminiApiKey');
-            const savedModel = localStorage.getItem('geminiModel');
-            modelInput.value = savedModel || 'gemini-1.5-pro-latest'; 
+            // ★ 変更点: localStorageの代わりにURLパラメータから設定を読み込む
+            const urlParams = new URLSearchParams(window.location.search);
+            const apiKeyFromUrl = urlParams.get('apiKey');
+            const modelFromUrl = urlParams.get('model');
+            
+            // フォームに値を設定
+            apiKeyInput.value = apiKeyFromUrl || '';
+            modelInput.value = modelFromUrl || 'gemini-2.5-pro';
             updateAppTitle();
-            if (savedApiKey) {
-                apiKeyInput.value = savedApiKey;
-                settingsContainer.classList.add('hidden');
+
+            if (apiKeyFromUrl) {
+                // APIキーがURLにあれば、設定画面を隠し、チャットを初期化
+                settingsForm.classList.add('hidden');
                 setupChat();
-                displayInitialWelcomeMessage();
+                if (chat) { // setupChatが成功した場合のみ
+                     displayInitialWelcomeMessage();
+                }
             } else {
-                settingsContainer.classList.remove('hidden');
-                displayError("APIキーが設定されていません。設定画面でAPIキーを入力してください。");
+                // APIキーがなければ、設定画面を表示
+                settingsForm.classList.remove('hidden');
+                displayError("APIキーが設定されていません。設定画面でAPIキーとモデル名を入力し、「設定を適用」ボタンを押してください。");
                 chatContainer.style.display = 'none';
             }
         }

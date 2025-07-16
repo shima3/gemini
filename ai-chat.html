@@ -594,7 +594,7 @@
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
                 const now = new Date();
-                a.download = `gemini-chat-history-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.json`;
+                a.download = `chat${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.json`;
                 document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
                 showToast("履歴をダウンロードしました。");
             } catch (error) { displayError("履歴のダウンロードに失敗しました。"); }
@@ -665,8 +665,8 @@
             a.href = url;
             const h = String(messageDate.getHours()).padStart(2, '0');
             const min = String(messageDate.getMinutes()).padStart(2, '0');
-            const s = String(messageDate.getSeconds()).padStart(2, '0');
-            a.download = `code-${h}${min}${s}.${extension}`;
+            // const s = String(messageDate.getSeconds()).padStart(2, '0');
+            a.download = `code-${h}${min}.${extension}`;
             document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
         }
         

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高機能チャットUI - プロトタイプ v1</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --text-color: #e0e0e0;
+            --primary-color: #4CAF50;
+            --secondary-color: #212121;
+            --border-color: #424242;
+            --header-bg: #1e1e1e;
+            --user-msg-bg: #0d47a1;
+            --ai-msg-bg: #333333;
+            --input-bg: #2a2a2a;
+            --disabled-color: #757575;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        header {
+            background-color: var(--header-bg);
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 1.2em;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: var(--disabled-color);
+            cursor: not-allowed;
+        }
+        #settings-area {
+            background-color: var(--secondary-color);
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        #settings-area.hidden { display: none; }
+        .settings-form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .settings-form input {
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            background-color: var(--input-bg);
+            color: var(--text-color);
+        }
+        main {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        #chat-history {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .message-container {
+            display: flex;
+            flex-direction: column;
+            max-width: 80%;
+        }
+        .message-container.user { align-self: flex-end; align-items: flex-end; }
+        .message-container.ai { align-self: flex-start; align-items: flex-start; }
+        .message-bubble {
+            padding: 10px 15px;
+            border-radius: 15px;
+            position: relative;
+        }
+        .message-container.user .message-bubble { background-color: var(--user-msg-bg); border-top-right-radius: 5px; }
+        .message-container.ai .message-bubble { background-color: var(--ai-msg-bg); border-top-left-radius: 5px; }
+        .message-bubble .content {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .message-bubble .content p:first-child { margin-top: 0; }
+        .message-bubble .content p:last-child { margin-bottom: 0; }
+        .message-time {
+            font-size: 0.75em;
+            color: #bdbdbd;
+            margin-top: 5px;
+            padding: 0 5px;
+        }
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            background-color: #9e9e9e;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+        footer {
+            padding: 10px 20px;
+            border-top: 1px solid var(--border-color);
+            background-color: var(--header-bg);
+            flex-shrink: 0;
+        }
+        .input-area { display: flex; align-items: flex-end; gap: 10px; }
+        .input-area textarea {
+            flex-grow: 1;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            background-color: var(--input-bg);
+            color: var(--text-color);
+            font-size: 1em;
+            resize: none;
+            max-height: 200px;
+            overflow-y: auto;
+            line-height: 1.5;
+        }
+
+        /* Markdown and Highlight.js Styles */
+        .message-bubble pre {
+            background-color: #1e1e1e;
+            padding: 0;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        .code-header {
+            background-color: #333;
+            padding: 5px 10px;
+            font-size: 0.8em;
+            color: #ccc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .code-header button {
+            background: none;
+            border: none;
+            color: #ccc;
+            cursor: pointer;
+            padding: 2px 5px;
+            font-size: 0.9em;
+        }
+        .code-header button:hover {
+            color: white;
+        }
+        .message-bubble pre code.hljs {
+            padding: 15px;
+            display: block;
+            overflow-x: auto;
+            white-space: pre-wrap; /* Wrap long lines */
+            word-break: break-all; /* Force break long words/tokens */
+        }
+        .message-bubble code:not(pre code) {
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 0.2em 0.4em;
+            margin: 0;
+            font-size: 85%;
+            border-radius: 3px;
+        }
+        .message-bubble svg {
+            max-width: 100%;
+            height: auto;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        /* Default highlight.js theme (vs2015) override for dark mode */
+        .hljs{color:#dcdcdc;background:#1e1e1e}
+        .hljs-keyword,.hljs-literal,.hljs-symbol,.hljs-name{color:#569cd6}
+        .hljs-link{color:#569cd6;text-decoration:underline}
+        .hljs-built_in,.hljs-type{color:#4ec9b0}
+        .hljs-number,.hljs-class{color:#b5cea8}
+        .hljs-string,.hljs-meta-string{color:#d69d85}
+        .hljs-regexp,.hljs-template-tag{color:#9a5334}
+        .hljs-subst,.hljs-function,.hljs-title,.hljs-params,.hljs-formula{color:#dcdcdc}
+        .hljs-comment,.hljs-quote{color:#6a9955;font-style:italic}
+        .hljs-doctag{color:#608b4e}
+        .hljs-meta,.hljs-meta-keyword,.hljs-tag{color:#9b9b9b}
+        .hljs-variable,.hljs-template-variable{color:#bd63c5}
+        .hljs-attr,.hljs-attribute{color:#9cdcfe}
+        .hljs-section{color:gold}
+        .hljs-emphasis{font-style:italic}
+        .hljs-strong{font-weight:700}
+        .hljs-bullet,.hljs-selector-tag,.hljs-selector-id,.hljs-selector-class,.hljs-selector-attr,.hljs-selector-pseudo{color:#d7ba7d}
+        .hljs-addition{background-color:#144212;display:inline-block;width:100%}
+        .hljs-deletion{background-color:#600;display:inline-block;width:100%}
+    </style>
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@google/generative-ai@0.14.0/dist/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
+    <script>
+        // MathJax Configuration
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+</head>
+<body>
+    <header>
+        <h1>高機能チャットUI - v1</h1>
+        <button id="settings-toggle-btn">設定</button>
+    </header>
+
+    <section id="settings-area">
+        <form class="settings-form" id="settings-form">
+            <input type="text" id="model-name-input" placeholder="モデル名" required>
+            <input type="password" id="api-key-input" placeholder="Google AI APIキー" required style="width: 300px;">
+            <button type="submit" id="apply-settings-btn">適用</button>
+        </form>
+    </section>
+
+    <main id="main-content">
+        <div id="chat-history">
+            <!-- Messages will be appended here -->
+        </div>
+    </main>
+
+    <footer>
+        <div class="input-area">
+            <textarea id="message-input" placeholder="メッセージを入力... (Ctrl+Enterで送信)" rows="1"></textarea>
+            <button id="send-btn" disabled>送信</button>
+        </div>
+    </footer>
+
+    <script type="module">
+        const { GoogleGenerativeAI } = google;
+
+        // DOM Elements
+        const settingsToggleBtn = document.getElementById('settings-toggle-btn');
+        const settingsArea = document.getElementById('settings-area');
+        const settingsForm = document.getElementById('settings-form');
+        const modelNameInput = document.getElementById('model-name-input');
+        const apiKeyInput = document.getElementById('api-key-input');
+        const applySettingsBtn = document.getElementById('apply-settings-btn');
+        const chatHistory = document.getElementById('chat-history');
+        const messageInput = document.getElementById('message-input');
+        const sendBtn = document.getElementById('send-btn');
+        const mainContent = document.getElementById('main-content');
+
+        let genAI;
+        let generativeModel;
+        let chat;
+        let chatHistoryArray = [];
+
+        // --- Core Application Logic ---
+
+        function initializeApp() {
+            // Load settings from URL params if available
+            const urlParams = new URLSearchParams(window.location.search);
+            const apiKey = urlParams.get('apiKey');
+            const modelName = urlParams.get('modelName') || 'gemini-1.5-pro-latest';
+            
+            modelNameInput.value = modelName;
+            if (apiKey) {
+                apiKeyInput.value = apiKey;
+                settingsArea.classList.add('hidden');
+                tryInitializeChat();
+            } else {
+                showSettingsAndLockUI();
+            }
+
+            // Event Listeners
+            settingsToggleBtn.addEventListener('click', () => settingsArea.classList.toggle('hidden'));
+            settingsForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                tryInitializeChat();
+            });
+            sendBtn.addEventListener('click', sendMessage);
+            messageInput.addEventListener('keydown', handleKeydown);
+            messageInput.addEventListener('input', handleInput);
+        }
+
+        function showSettingsAndLockUI(message = "APIキーを設定してください。") {
+            settingsArea.classList.remove('hidden');
+            addMessageToHistory('ai', `<p>${message}</p>`);
+            setUIState(false);
+        }
+        
+        function setUIState(enabled) {
+            messageInput.disabled = !enabled;
+            sendBtn.disabled = !enabled || messageInput.value.trim() === '';
+        }
+
+        function tryInitializeChat() {
+            const apiKey = apiKeyInput.value.trim();
+            const modelName = modelNameInput.value.trim();
+
+            if (!apiKey || !modelName) {
+                alert("APIキーとモデル名を入力してください。");
+                return;
+            }
+
+            try {
+                genAI = new GoogleGenerativeAI(apiKey);
+                const systemInstruction = {
+                    role: "system",
+                    parts: [{ text: "ユーザーから図形やグラフの描画を指示された場合は、必ずSVGコードを生成し、そのコードブロックの言語指定を ```svg として応答してください。他の形式（xmlなど）は使用しないでください。また、数式を記述する際は、必ずLaTeX形式（インラインは`$...$`、ブロックは`$$...$$`）を使用してください。" }],
+                };
+                generativeModel = genAI.getGenerativeModel({ model: modelName, systemInstruction });
+                chat = generativeModel.startChat({ history: [] });
+                
+                chatHistory.innerHTML = '';
+                addMessageToHistory('ai', `<p>AIとの接続が確立しました。モデル: <strong>${modelName}</strong></p>`);
+                setUIState(true);
+                settingsArea.classList.add('hidden');
+
+                // Update URL for easy sharing/reloading
+                const url = new URL(window.location);
+                url.searchParams.set('apiKey', apiKey);
+                url.searchParams.set('modelName', modelName);
+                window.history.pushState({}, '', url);
+
+            } catch (error) {
+                console.error("Initialization failed:", error);
+                alert(`初期化に失敗しました: ${error.message}`);
+                showSettingsAndLockUI(`初期化エラー: ${error.message}`);
+            }
+        }
+
+        async function sendMessage() {
+            const prompt = messageInput.value.trim();
+            if (!prompt || !chat) return;
+
+            setUIState(false);
+            addMessageToHistory('user', prompt);
+            messageInput.value = '';
+            messageInput.style.height = 'auto'; // Reset height
+
+            const aiMessageBubble = addMessageToHistory('ai', '', true); // Add placeholder
+            
+            try {
+                const result = await chat.sendMessageStream(prompt);
+                let fullResponse = "";
+                for await (const chunk of result.stream) {
+                    const chunkText = chunk.text();
+                    fullResponse += chunkText;
+                    updateAIMessage(aiMessageBubble, fullResponse);
+                }
+                finalizeAIMessage(aiMessageBubble, fullResponse);
+
+            } catch (error) {
+                console.error("API Error:", error);
+                const errorMessage = `エラーが発生しました: ${error.message}`;
+                finalizeAIMessage(aiMessageBubble, errorMessage, true);
+            } finally {
+                setUIState(true);
+                messageInput.focus();
+            }
+        }
+
+        // --- UI and Rendering ---
+
+        function addMessageToHistory(role, text, isStreaming = false) {
+            const timestamp = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+
+            const messageContainer = document.createElement('div');
+            messageContainer.className = `message-container ${role}`;
+
+            const messageBubble = document.createElement('div');
+            messageBubble.className = 'message-bubble';
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'content';
+            
+            if (isStreaming) {
+                const indicator = document.createElement('div');
+                indicator.className = 'typing-indicator';
+                indicator.innerHTML = '<span></span><span></span><span></span>';
+                contentDiv.appendChild(indicator);
+            } else if (role === 'user') {
+                contentDiv.textContent = text;
+            } else {
+                contentDiv.innerHTML = text; // Assumes safe HTML from trusted source or post-processing
+            }
+
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = timestamp;
+            
+            messageBubble.appendChild(contentDiv);
+            messageContainer.appendChild(messageBubble);
+            messageContainer.appendChild(timeDiv);
+            chatHistory.appendChild(messageContainer);
+            mainContent.scrollTop = mainContent.scrollHeight;
+            
+            return messageBubble;
+        }
+
+        function updateAIMessage(messageBubble, text) {
+            const contentDiv = messageBubble.querySelector('.content');
+            // Use a temporary div to render markdown to avoid re-rendering the whole thing constantly
+            contentDiv.innerHTML = marked.parse(text);
+            mainContent.scrollTop = mainContent.scrollHeight;
+        }
+        
+        function finalizeAIMessage(messageBubble, finalResponse, isError = false) {
+            const contentDiv = messageBubble.querySelector('.content');
+            if (isError) {
+                contentDiv.innerHTML = `<p style="color: #ff8a80;">${finalResponse}</p>`;
+            } else {
+                contentDiv.innerHTML = renderRichContent(finalResponse);
+                // Apply syntax highlighting
+                contentDiv.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
+                // Re-render MathJax for the new content
+                if (window.MathJax) {
+                    MathJax.typesetPromise([contentDiv]);
+                }
+            }
+            mainContent.scrollTop = mainContent.scrollHeight;
+        }
+
+        // --- Rich Content Rendering (Markdown, Code, SVG, LaTeX) ---
+        
+        const markedRenderer = new marked.Renderer();
+        markedRenderer.code = (code, language) => {
+            // ** SVG rendering logic **
+            if (language === 'svg') {
+                return `<div class="svg-container">${code}</div>`;
+            }
+            
+            // Standard code block with header
+            const validLang = hljs.getLanguage(language) ? language : 'plaintext';
+            const highlightedCode = hljs.highlight(code, { language: validLang, ignoreIllegals: true }).value;
+
+            // Adding a header to the code block for language name
+            return `
+                <pre>
+                    <div class="code-header">
+                        <span>${validLang}</span>
+                        <div>
+                            <button onclick="navigator.clipboard.writeText(this.closest('pre').querySelector('code').textContent)">コピー</button>
+                        </div>
+                    </div>
+                    <code class="hljs ${validLang}">${highlightedCode}</code>
+                </pre>
+            `;
+        };
+        marked.setOptions({
+            renderer: markedRenderer,
+            gfm: true,
+            breaks: true,
+            pedantic: false,
+            smartLists: true,
+            smartypants: false
+        });
+
+        function renderRichContent(text) {
+            // Marked will handle code blocks (including SVG) and other markdown.
+            // MathJax will handle LaTeX expressions after marked has run.
+            return marked.parse(text);
+        }
+
+        // --- Event Handlers for UI ---
+
+        function handleKeydown(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+        
+        function handleInput() {
+            // Auto-resize textarea
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+            // Enable/disable send button
+            sendBtn.disabled = this.value.trim() === '' || messageInput.disabled;
+        }
+
+        // --- Initialize ---
+        initializeApp();
+    </script>
+</body>
+</html>

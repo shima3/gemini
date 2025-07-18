@@ -1,0 +1,46 @@
+2025/7/18 Fri
+添付の仕様書に従ってアプリを作成してください。
+spec.txt
+
+問題点：APIエラーのとき、入力内容が保持されていない。
+
+問題点：２回目にメッセージを送信した時、以下のエラーが発生した。
+index.mjs:51 
+ POST https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?alt=sse 400 (Bad Request)
+VM7 code-0718-2125.html:381 API Error: g: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?alt=sse: [400 ] Invalid JSON payload received. Unknown name "timestamp" at 'contents[0]': Cannot find field. [{"@type":"type.googleapis.com/google.rpc.BadRequest","fieldViolations":[{"field":"contents[0]","description":"Invalid JSON payload received. Unknown name \"timestamp\" at 'contents[0]': Cannot find field."}]}]
+    at https://cdn.jsdelivr.net/npm/@google/generative-ai/+esm:57:2147
+    at async https://cdn.jsdelivr.net/npm/@google/generative-ai/+esm:57:1971
+    at async x (https://cdn.jsdelivr.net/npm/@google/generative-ai/+esm:106:39)
+getAiResponse	@	VM7 code-0718-2125.html:381
+await in getAiResponse		
+handleChatFormSubmit	@	VM7 code-0718-2125.html:238
+
+問題点：チャット履歴のメッセージが吹き出しに入っていない。
+
+問題点：APIキーを未設定のとき、設定が閉じていた。
+
+問題点：ストリーミングの方が待ち時間が長い。途中でエラーが発生する可能性が高まる。
+
+問題点：APIキーを設定し、適用を押すと、APIキーが消える。URLにも設定されていない。
+
+問題点：AIからのメッセージに対するコピーボタンと日時が左側に表示される。
+仕様書では横としか指定していない。
+
+spec.txt
+仕様書の記述によって、これまでに生じた問題を避けるとしたら、添付の仕様書をどのように修正しますか？
+
+API key
+AIzaSyC1pCDHjEFJDOSP825nWiW1PxKw0PicXwU
+
+Markdown形式で、# 見出し、* 太字やイタリック*、- 箇条書きリスト を使って自己紹介してください。
+
+二次方程式の解の公式 $ax^2 + bx + c = 0$ を、ブロック数式を使って $$x = {-b \pm \sqrt{b^2-4ac} \over 2a}$$ と示してください。
+
+スマイルマークの簡単なSVGを描画してください。
+
+JavaScriptでコンソールに"Hello"と表示するコードと、Pythonでフィボナッチ数列を計算する関数をそれぞれ示してください。
+
+光合成について説明してください。まずMarkdownで見出しを書き、次にその化学反応式をLaTeXで示し、最後に円を描くSVGを提示してください。
+
+code-2025-07-18-13-28.py
+このファイルをそのまま表示してください。

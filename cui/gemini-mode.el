@@ -4,8 +4,9 @@
 ;;
 ;; 使い方:
 ;; 1. (setq gemini-api-key "YOUR_API_KEY") を init.el に設定してください。
-;; 2. M-x gemini でチャットバッファを開始します。
-;; 3. プロンプトを入力し、C-<return> を押して Gemini に送信します。
+;; 2. (setq gemini-model "gemini-1.5-pro-latest") のようにモデル名も設定できます。
+;; 3. M-x gemini でチャットバッファを開始します。
+;; 4. プロンプトを入力し、C-<return> を押して Gemini に送信します。
 
 (require 'json)
 (require 'url)
@@ -17,8 +18,13 @@
   :type 'string
   :group 'gemini)
 
-(defconst gemini-api-url "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
-  "Gemini APIのエンドポイントURL。")
+(defcustom gemini-model "gemini-pro"
+  "使用するGoogle Geminiのモデル名。"
+  :type 'string
+  :group 'gemini)
+
+(defconst gemini-api-base-url "https://generativelanguage.googleapis.com/v1beta/models/"
+  "Gemini APIのベースURL。")
 
 (defconst gemini-message-separator "^---\n"
   "メッセージの区切りを示す正規表現。")
@@ -70,9 +76,9 @@
                  (content (cdr (assoc 'content first-candidate)))
                  (parts (cdr (assoc 'parts content)))
                  (first-part (car parts))
-                 (text (cdr (assoc 'text first-part))))
+                 (text (or (cdr (assoc 'text first-part)) "")))
             (with-current-buffer original-buffer
-              (gemini--insert-response (or text "（空の応答）"))))
+              (gemini--insert-response text)))
         (display-buffer (current-buffer))
         (error "Gemini APIエラー (HTTP %d): %s" response-status response-body))))
   (kill-buffer (url-retrieve-buffer)))
@@ -89,11 +95,14 @@
   (let* ((messages (gemini--parse-buffer))
          (payload `(:contents ,messages))
          (json-payload (json-encode payload))
-         (url (concat gemini-api-url "?key=" gemini-api-key))
+         (url (format "%s%s:generateContent?key=%s"
+                      gemini-api-base-url
+                      gemini-model
+                      gemini-api-key))
          (url-request-method "POST")
          (url-request-extra-headers '(("Content-Type" . "application/json")))
          (url-request-data json-payload))
-    (message "Geminiにリクエストを送信中...")
+    (message "Geminiにリクエストを送信中 (モデル: %s)..." gemini-model)
     (url-retrieve url 'gemini--handle-response (current-buffer))))
 
 

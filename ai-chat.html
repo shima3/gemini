@@ -223,6 +223,14 @@
         .user-message .message-files-container img { max-width: 150px; max-height: 150px; border-radius: 8px; margin-top: 0; }
         .file-display-item { display: inline-flex; align-items: center; gap: 8px; background-color: rgba(0, 0, 0, 0.05); padding: 6px 12px; border-radius: 16px; font-size: 0.9em; }
         .file-display-item svg { width: 16px; height: 16px; fill: #555; flex-shrink: 0; }
+        
+        .message-content [data-file-id] {
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .message-content [data-file-id]:hover {
+            opacity: 0.8;
+        }
 
         .typing-indicator-bubble {
             background-color: var(--ai-message-bg);
@@ -311,11 +319,13 @@
                 <div class="history-management">
                     <h4>対話履歴の管理</h4>
                     <div class="history-buttons">
-                        <button id="download-history-btn" type="button">履歴をダウンロード</button>
-                        <label for="upload-history-input" class="button-label">履歴をアップロード</label>
-                        <input type="file" id="upload-history-input" accept=".json,application/json" style="display: none;">
+                        <!-- ★ 文言変更 -->
+                        <button id="save-history-btn" type="button">履歴を保存</button>
+                        <label for="restore-history-input" class="button-label">履歴を復元</label>
+                        <input type="file" id="restore-history-input" accept=".json,application/json" style="display: none;">
                     </div>
-                    <p style="font-size: 0.85em; color: #666; margin-top: 10px; margin-bottom: 0;">※現在の対話履歴をJSONファイルとして保存・読み込みできます。アップロードすると現在の履歴は上書きされます。</p>
+                    <!-- ★ 文言変更 -->
+                    <p style="font-size: 0.85em; color: #666; margin-top: 10px; margin-bottom: 0;">※現在の対話履歴をJSONファイルとして保存・復元できます。復元すると現在の履歴は上書きされます。</p>
                 </div>
             </div>
         </form>
@@ -346,9 +356,11 @@
     <script type="module">
         const { GoogleGenerativeAI } = await import("https://unpkg.com/@google/generative-ai/dist/index.mjs");
 
-        // Code block data store
+        // Data stores
         const codeBlocks = new Map();
+        const attachedFileObjects = new Map();
         let codeBlockIdCounter = 0;
+        let attachedFileIdCounter = 0;
 
         // DOM Elements
         const appContainer = document.querySelector('.app-container');
@@ -367,8 +379,8 @@
         const fileInputLabel = document.getElementById('file-input-label');
         const filePreview = document.getElementById('file-preview');
         const toastNotification = document.getElementById('toast-notification');
-        const downloadHistoryBtn = document.getElementById('download-history-btn');
-        const uploadHistoryInput = document.getElementById('upload-history-input');
+        const saveHistoryBtn = document.getElementById('save-history-btn'); // ★ ID変更
+        const restoreHistoryInput = document.getElementById('restore-history-input'); // ★ ID変更
         const appTitle = document.getElementById('app-title');
 
         // State
@@ -379,10 +391,7 @@
         let attachedFiles = [];
         let loadingIndicator;
         let debugMode = null; 
-        let audioContext = null; // ★ 追加: AudioContextインスタンス
-
-        const TEXT_MIME_TYPES = ['application/json', 'application/xml', 'application/javascript', 'application/csv', 'application/x-sh'];
-        const TEXT_EXTENSIONS = [ 'txt', 'md', 'html', 'css', 'js', 'ts', 'jsx', 'tsx', 'json', 'xml', 'csv', 'py', 'rb', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'sh', 'bat', 'ps1', 'sql', 'log', 'ini', 'toml', 'yaml', 'yml', 'svg', 'go', 'php', 'swift' ];
+        let audioContext = null;
         
         function updateAppTitle() {
             const modelName = modelInput.value.trim();
@@ -402,13 +411,8 @@
             const placeholders = new Map();
             let placeholderId = 0;
 
-            const fileBlockRegex = /\[添付ファイル: (.*?)\]\n```([\s\S]*?)```/g;
-            let processedText = text.replace(fileBlockRegex, (match, fileName) => {
-                return `\n> AIはファイル "${fileName}" の内容を参照しました\n`;
-            });
-
             const codeBlockRegex = /```(\w*)\n([\s\S]*?)\n```/g;
-            processedText = processedText.replace(codeBlockRegex, (match, lang, code) => {
+            let processedText = text.replace(codeBlockRegex, (match, lang, code) => {
                 const id = `%%CODE_BLOCK_PLACEHOLDER_${placeholderId++}%%`;
                 const language = (lang || 'plaintext').toLowerCase();
                 
@@ -465,6 +469,7 @@
             }
         }
         
+        // ★ 変更: 復元されたファイルもダウンロード可能にする
         function addMessageToDisplay(sender, text, files = [], timestamp = null) {
             const messageDate = timestamp ? new Date(timestamp) : new Date();
             const messageRow = document.createElement('div');
@@ -488,25 +493,54 @@
                 files.forEach(file => {
                     const isFileObject = file instanceof File;
                     const isReconstructed = !!file.isReconstructed;
-                    const mimeType = isFileObject ? file.type : (file.inlineData ? file.inlineData.mimeType : (isReconstructed ? 'text/plain' : ''));
-                    const fileName = isFileObject ? file.name : (isReconstructed ? file.name : `添付ファイル (${mimeType})`);
+                    const mimeType = isFileObject ? file.type : (isReconstructed ? file.inlineData.mimeType : '');
+                    const fileName = isFileObject ? file.name : (isReconstructed ? file.name : `添付ファイル`);
                     const isImage = mimeType && mimeType.startsWith('image/');
                     
+                    let fileElement;
+                    let fileId = null;
+
+                    if (isReconstructed) {
+                        const byteString = atob(file.inlineData.data);
+                        const ab = new ArrayBuffer(byteString.length);
+                        const ia = new Uint8Array(ab);
+                        for (let i = 0; i < byteString.length; i++) {
+                            ia[i] = byteString.charCodeAt(i);
+                        }
+                        const blob = new Blob([ab], { type: mimeType });
+                        const reconstructedFile = new File([blob], fileName, { type: mimeType });
+                        
+                        fileId = `file-${attachedFileIdCounter++}`;
+                        attachedFileObjects.set(fileId, reconstructedFile);
+
+                    } else if (isFileObject) {
+                        fileId = `file-${attachedFileIdCounter++}`;
+                        attachedFileObjects.set(fileId, file);
+                    }
+
                     if (isImage) {
                         const img = document.createElement('img');
-                        if (isFileObject) {
-                            img.src = URL.createObjectURL(file);
-                            img.onload = () => URL.revokeObjectURL(img.src);
-                        } else {
-                            img.src = `data:${mimeType};base64,${file.inlineData.data}`;
+                        if (fileId) {
+                           const fileObj = attachedFileObjects.get(fileId);
+                           img.src = URL.createObjectURL(fileObj);
+                           img.onload = () => URL.revokeObjectURL(img.src);
+                        } else { // 履歴からの復元（旧形式）
+                           img.src = `data:${mimeType};base64,${file.inlineData.data}`;
                         }
-                        filesContainer.appendChild(img);
+                        fileElement = img;
                     } else {
                         const fileItem = document.createElement('div');
                         fileItem.className = 'file-display-item';
                         fileItem.innerHTML = `<svg viewBox="0 0 24 24"><path fill="currentColor" d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" /></svg><span>${fileName}</span>`;
-                        filesContainer.appendChild(fileItem);
+                        fileElement = fileItem;
                     }
+                    
+                    if (fileId) {
+                        fileElement.dataset.fileId = fileId;
+                        fileElement.title = `クリックしてダウンロード: ${fileName}`;
+                    }
+
+                    filesContainer.appendChild(fileElement);
                 });
                 contentEl.appendChild(filesContainer);
             }
@@ -544,33 +578,27 @@
             } catch (error) { displayError(`チャットの初期化に失敗: ${error.message}`); chatContainer.style.display = 'none'; }
         }
 
-        // ★ 追加: 通知音を再生する関数
         function playNotificationSound() {
             if (!audioContext || audioContext.state !== 'running') {
                 console.warn("AudioContext not available, skipping sound playback.");
                 return;
             }
-
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
-
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
-
             const now = audioContext.currentTime;
             const duration = 0.15;
-            
             oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(880, now); // A5 note
-
+            oscillator.frequency.setValueAtTime(880, now);
             gainNode.gain.setValueAtTime(0, now);
-            gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01); // Volume
+            gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
             gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
             oscillator.start(now);
             oscillator.stop(now + duration);
         }
 
+        // ★ 変更: ファイル処理を統一
         async function handleChatSubmit(e) {
             e.preventDefault();
             const userInput = messageInput.value.trim();
@@ -584,7 +612,7 @@
                     addMessageToDisplay('user', userInput, filesToDisplay, timestamp);
                 } else if (debugMode === 'ai') {
                     addMessageToDisplay('model', userInput, [], timestamp);
-                    playNotificationSound(); // デバッグモードでも音を鳴らす
+                    playNotificationSound();
                 }
                 
                 attachedFiles = [];
@@ -606,19 +634,21 @@
             loadingIndicator.style.display = 'block';
             chatHistory.scrollTop = chatHistory.scrollHeight;
             try {
-                const filePromises = filesToSend.map(file => isTextFile(file) ? readTextFileAsPart(file) : fileToGenerativePart(file));
-                const allParts = await Promise.all(filePromises);
-                const textPartsContent = allParts.filter(p => p.text).map(p => p.text);
-                const dataParts = allParts.filter(p => p.inlineData);
-                const combinedText = [ ...textPartsContent, userInput ].filter(Boolean).join('\n\n');
-                const parts = [ ...dataParts, ...(combinedText ? [{ text: combinedText }] : []) ];
+                const dataPartPromises = filesToSend.map(file => fileToGenerativePart(file));
+                const dataParts = await Promise.all(dataPartPromises);
+                
+                const fileMarkersText = filesToSend.map(file => `\n[添付ファイル: ${file.name}]`).join('');
+                const combinedText = userInput + fileMarkersText;
+
+                const parts = [ ...dataParts, { text: combinedText } ];
+
                 const result = await chat.sendMessage(parts);
                 const response = await result.response;
                 const text = response.text();
                 const aiTimestamp = new Date().toISOString();
                 messageTimestamps.push(aiTimestamp);
                 addMessageToDisplay('model', text, [], aiTimestamp);
-                playNotificationSound(); // ★ 通知音を再生
+                playNotificationSound();
                 clearError();
             } catch (error) {
                 console.error('API Error:', error); messageTimestamps.pop();
@@ -633,23 +663,6 @@
                 attachedFiles = []; renderFilePreview(); messageInput.value = ''; autoResizeTextarea();
             }
         }
-
-        function isTextFile(file) {
-            const fileType = file.type; const fileName = file.name || '';
-            const fileExtension = fileName.split('.').pop()?.toLowerCase();
-            if (fileType && fileType.startsWith('text/')) return true;
-            if (fileType && TEXT_MIME_TYPES.includes(fileType)) return true;
-            if (fileExtension && TEXT_EXTENSIONS.includes(fileExtension)) return true;
-            return false;
-        }
-
-        function readTextFileAsPart(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => { const formattedText = `[添付ファイル: ${file.name}]\n\`\`\`\n${e.target.result}\n\`\`\``; resolve({ text: formattedText }); };
-                reader.onerror = reject; reader.readAsText(file);
-            });
-        }
         
         function fileToGenerativePart(file) {
             return new Promise((resolve, reject) => {
@@ -659,7 +672,8 @@
             });
         }
         
-        async function handleDownloadHistory() {
+        // ★ 関数名とToastメッセージを変更
+        async function handleSaveHistory() {
             if (!chat) { showToast("チャットが開始されていません。"); return; }
             try {
                 const currentHistory = await chat.getHistory();
@@ -667,18 +681,19 @@
                 if (currentHistory.length === 0) { showToast("対話履歴がありません。"); return; }
                 if (currentHistory.length !== historyTimestamps.length) { displayError("履歴とタイムスタンプの数が一致しません。"); return; }
                 const historyWithTimestamps = currentHistory.map((entry, index) => ({ ...entry, timestamp: historyTimestamps[index] }));
-                const dataToSave = { version: "1.0", model: modelInput.value.trim(), history: historyWithTimestamps };
+                const dataToSave = { version: "2.0", model: modelInput.value.trim(), history: historyWithTimestamps };
                 const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: 'application/json' });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
                 const now = new Date();
-                a.download = `chat${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.json`;
+                a.download = `chat-history-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.json`;
                 document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
-                showToast("履歴をダウンロードしました。");
-            } catch (error) { displayError("履歴のダウンロードに失敗しました。"); }
+                showToast("履歴を保存しました。");
+            } catch (error) { displayError("履歴の保存に失敗しました。"); }
         }
 
-        function handleUploadHistory(event) {
+        // ★ 関数名とToastメッセージを変更
+        function handleRestoreHistory(event) {
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
@@ -686,7 +701,7 @@
                 try {
                     const loadedData = JSON.parse(e.target.result);
                     let newHistory, newTimestamps;
-                    if (loadedData.version === "1.0" && Array.isArray(loadedData.history)) {
+                    if ((loadedData.version === "2.0" || loadedData.version === "1.0") && Array.isArray(loadedData.history)) {
                         newHistory = loadedData.history.map(entry => { const { timestamp, ...rest } = entry; return rest; });
                         newTimestamps = loadedData.history.map(entry => entry.timestamp);
                         if (loadedData.model) {
@@ -694,7 +709,7 @@
                             updateAppTitle();
                             showToast(`モデルが「${loadedData.model}」に更新されました。「適用」を押してください。`);
                         }
-                    } else if (Array.isArray(loadedData)) {
+                    } else if (Array.isArray(loadedData)) { // 旧形式のサポート
                         newHistory = loadedData; newTimestamps = newHistory.map(() => new Date().toISOString());
                     } else { throw new Error("無効な履歴ファイル形式です。"); }
                     conversationHistory = newHistory;
@@ -704,57 +719,76 @@
                         setupChat(); 
                     }
                     settingsForm.classList.add('hidden');
-                    showToast("履歴をアップロードしました。");
-                } catch (error) { displayError(`履歴の読み込みに失敗しました: ${error.message}`); } finally { event.target.value = ''; }
+                    showToast("履歴を復元しました。");
+                } catch (error) { displayError(`履歴の復元に失敗しました: ${error.message}`); } finally { event.target.value = ''; }
             };
             reader.onerror = () => displayError("ファイルの読み込み中にエラーが発生しました。"); reader.readAsText(file);
         }
     
+        // ★ 変更: ファイル復元ロジックを追加
         function rebuildChatDisplay(history, timestamps) {
             chatHistory.innerHTML = '';
+            attachedFileObjects.clear();
+            attachedFileIdCounter = 0;
             const welcomeText = "ページの一番下にある枠にメッセージを入力し、送信するとAIが回答します。メッセージは外部に送信されるので、個人情報などを送信しないようご注意ください。AIの回答には誤りが含まれる可能性があるので、自己責任でご利用ください。";
             addMessageToDisplay('model', welcomeText, [], timestamps[0]);
-            const fileBlockRegex = /\[添付ファイル: (.*?)\]\n```\n(?:[\s\S]*?)\n```\n?\s*/g;
+            
             history.forEach((message, index) => {
                 const timestamp = timestamps[index + 1];
-                const fileParts = message.parts.filter(p => p.inlineData);
-                const textParts = message.parts.filter(p => p.text);
-                let combinedText = textParts.map(p => p.text).join('\n\n');
-                const reconstructedFiles = [...fileParts];
                 if (message.role === 'user') {
-                    const cleanedText = combinedText.replace(fileBlockRegex, (match, fileName) => {
-                        reconstructedFiles.push({ name: fileName, isReconstructed: true }); return '';
-                    }).trim();
-                    addMessageToDisplay(message.role, cleanedText, reconstructedFiles, timestamp);
-                } else {
-                    addMessageToDisplay(message.role, combinedText, fileParts, timestamp);
+                    const textPartContent = message.parts.find(p => p.text)?.text || '';
+                    const inlineDataParts = message.parts.filter(p => p.inlineData);
+                    const fileMarkerRegex = /\n\[添付ファイル: (.*?)\]/g;
+                    
+                    const reconstructedFiles = [];
+                    const fileNames = (textPartContent.match(fileMarkerRegex) || []).map(marker => marker.replace(/\n\[添付ファイル: /, '').replace(/\]$/, ''));
+
+                    inlineDataParts.forEach((part, i) => {
+                        reconstructedFiles.push({
+                            inlineData: part.inlineData,
+                            name: fileNames[i] || `file_${i+1}.dat`,
+                            isReconstructed: true
+                        });
+                    });
+                    
+                    const cleanedText = textPartContent.replace(fileMarkerRegex, '').trim();
+                    addMessageToDisplay('user', cleanedText, reconstructedFiles, timestamp);
+                } else { // AI message
+                    const text = message.parts.map(p => p.text).join('\n\n');
+                    addMessageToDisplay('model', text, [], timestamp);
                 }
             });
+
             if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
                 Promise.resolve().then(() => MathJax.typesetPromise([chatHistory])).catch((err) => console.error('MathJax error:', err));
             }
+        }
+
+        function downloadFile(file) {
+            const url = URL.createObjectURL(file);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
         function handleDownloadClick(code, language, messageDate) {
             const langMap = { 'javascript': 'js', 'python': 'py', 'html': 'html', 'css': 'css', 'java': 'java', 'csharp': 'cs', 'cpp': 'cpp', 'ruby': 'rb', 'go': 'go', 'shell': 'sh', 'bash': 'sh', 'json': 'json', 'sql': 'sql', 'typescript': 'ts', 'xml': 'xml', 'yaml': 'yaml', 'svg': 'svg' };
             const extension = langMap[language.toLowerCase()] || 'txt';
             const blob = new Blob([code], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-
+            
             const yyyy = messageDate.getFullYear();
             const mm = String(messageDate.getMonth() + 1).padStart(2, '0');
             const dd = String(messageDate.getDate()).padStart(2, '0');
             const h = String(messageDate.getHours()).padStart(2, '0');
             const min = String(messageDate.getMinutes()).padStart(2, '0');
+            const fileName = `code-${yyyy}${mm}${dd}-${h}${min}.${extension}`;
             
-            a.download = `code-${yyyy}${mm}${dd}-${h}${min}.${extension}`;
-            
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const file = new File([blob], fileName, { type: 'text/plain' });
+            downloadFile(file);
         }
         
         function showToast(message) {
@@ -798,10 +832,8 @@
             if (inputWrapper.classList.contains('submitting')) return;
             const clipboardData = e.clipboardData || window.clipboardData;
             if (!clipboardData) return;
-
             const items = clipboardData.items;
             const filesToPaste = [];
-
             for (let i = 0; i < items.length; i++) {
                 if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
                     const file = items[i].getAsFile();
@@ -809,15 +841,11 @@
                         const timestamp = new Date().getTime();
                         const extension = file.type.split('/')[1] || 'png';
                         const newName = `pasted-image-${timestamp}.${extension}`;
-                        const newFile = new File([file], newName, {
-                            type: file.type,
-                            lastModified: file.lastModified,
-                        });
+                        const newFile = new File([file], newName, { type: file.type, lastModified: file.lastModified, });
                         filesToPaste.push(newFile);
                     }
                 }
             }
-
             if (filesToPaste.length > 0) {
                 e.preventDefault();
                 addFiles(filesToPaste);
@@ -829,7 +857,6 @@
                 marked.setOptions({ gfm: true, breaks: true, mangle: false, headerIds: false });
             }
 
-            // ★ 追加: ユーザーの最初の操作でAudioContextを初期化
             const initAudio = () => {
                 if (audioContext) return;
                 try {
@@ -837,13 +864,10 @@
                     if (audioContext.state === 'suspended') {
                         audioContext.resume();
                     }
-                } catch (e) {
-                    console.error("Web Audio API is not supported in this browser.", e);
-                }
+                } catch (e) { console.error("Web Audio API is not supported in this browser.", e); }
             };
             document.body.addEventListener('click', initAudio, { once: true });
             document.body.addEventListener('keydown', initAudio, { once: true });
-
 
             settingsForm.addEventListener('submit', (e) => {
                 e.preventDefault();
@@ -872,8 +896,8 @@
             inputWrapper.addEventListener('drop', handleFileDrop, false);
             inputWrapper.addEventListener('paste', handlePaste, false);
 
-            downloadHistoryBtn.addEventListener('click', handleDownloadHistory);
-            uploadHistoryInput.addEventListener('change', handleUploadHistory);
+            saveHistoryBtn.addEventListener('click', handleSaveHistory); // ★ イベントリスナー更新
+            restoreHistoryInput.addEventListener('change', handleRestoreHistory); // ★ イベントリスナー更新
             
             chatHistory.addEventListener('click', (e) => {
                 const codeButton = e.target.closest('.code-copy-btn, .code-download-btn');
@@ -901,6 +925,16 @@
                             console.error('Failed to copy text:', err);
                             showToast("コピーに失敗しました。");
                         });
+                    }
+                    return;
+                }
+                
+                const fileElement = e.target.closest('[data-file-id]');
+                if(fileElement) {
+                    const fileId = fileElement.dataset.fileId;
+                    const fileToDownload = attachedFileObjects.get(fileId);
+                    if (fileToDownload) {
+                        downloadFile(fileToDownload);
                     }
                 }
             });

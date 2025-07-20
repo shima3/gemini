@@ -379,6 +379,7 @@
         let attachedFiles = [];
         let loadingIndicator;
         let debugMode = null; 
+        let audioContext = null; // ★ 追加: AudioContextインスタンス
 
         const TEXT_MIME_TYPES = ['application/json', 'application/xml', 'application/javascript', 'application/csv', 'application/x-sh'];
         const TEXT_EXTENSIONS = [ 'txt', 'md', 'html', 'css', 'js', 'ts', 'jsx', 'tsx', 'json', 'xml', 'csv', 'py', 'rb', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'sh', 'bat', 'ps1', 'sql', 'log', 'ini', 'toml', 'yaml', 'yml', 'svg', 'go', 'php', 'swift' ];
@@ -464,7 +465,6 @@
             }
         }
         
-        // ★ 変更: ユーザーメッセージもMarkdown等でレンダリングするように関数を再構成
         function addMessageToDisplay(sender, text, files = [], timestamp = null) {
             const messageDate = timestamp ? new Date(timestamp) : new Date();
             const messageRow = document.createElement('div');
@@ -476,16 +476,14 @@
             const contentEl = document.createElement('div');
             contentEl.classList.add('message-content');
 
-            // テキストコンテンツがある場合、Markdown、数式、コードとしてレンダリングする
             if (text) {
                 renderFormattedContent(contentEl, text, timestamp);
             }
 
-            // ユーザーメッセージでファイルがある場合の処理
             if (sender === 'user' && files.length > 0) {
                 const filesContainer = document.createElement('div');
                 filesContainer.className = 'message-files-container';
-                if (text) filesContainer.style.marginTop = '8px'; // テキストがあればマージンを追加
+                if (text) filesContainer.style.marginTop = '8px';
                 
                 files.forEach(file => {
                     const isFileObject = file instanceof File;
@@ -515,7 +513,6 @@
             
             messageEl.appendChild(contentEl);
 
-            // タイムスタンプとコピーボタンの追加
             const timestampEl = document.createElement('div');
             timestampEl.classList.add('message-timestamp');
             timestampEl.textContent = messageDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
@@ -524,9 +521,8 @@
             copyBtn.className = 'copy-message-btn';
             copyBtn.title = 'メッセージをコピー';
             copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
-            copyBtn.setAttribute('data-copy-text', text); // コピー対象は元のMarkdownテキスト
+            copyBtn.setAttribute('data-copy-text', text);
             
-            // 要素をDOMに追加
             messageRow.appendChild(messageEl);
             messageRow.appendChild(copyBtn);
             messageRow.appendChild(timestampEl);
@@ -548,6 +544,33 @@
             } catch (error) { displayError(`チャットの初期化に失敗: ${error.message}`); chatContainer.style.display = 'none'; }
         }
 
+        // ★ 追加: 通知音を再生する関数
+        function playNotificationSound() {
+            if (!audioContext || audioContext.state !== 'running') {
+                console.warn("AudioContext not available, skipping sound playback.");
+                return;
+            }
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            const now = audioContext.currentTime;
+            const duration = 0.15;
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(880, now); // A5 note
+
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01); // Volume
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+            oscillator.start(now);
+            oscillator.stop(now + duration);
+        }
+
         async function handleChatSubmit(e) {
             e.preventDefault();
             const userInput = messageInput.value.trim();
@@ -561,6 +584,7 @@
                     addMessageToDisplay('user', userInput, filesToDisplay, timestamp);
                 } else if (debugMode === 'ai') {
                     addMessageToDisplay('model', userInput, [], timestamp);
+                    playNotificationSound(); // デバッグモードでも音を鳴らす
                 }
                 
                 attachedFiles = [];
@@ -594,6 +618,7 @@
                 const aiTimestamp = new Date().toISOString();
                 messageTimestamps.push(aiTimestamp);
                 addMessageToDisplay('model', text, [], aiTimestamp);
+                playNotificationSound(); // ★ 通知音を再生
                 clearError();
             } catch (error) {
                 console.error('API Error:', error); messageTimestamps.pop();
@@ -804,6 +829,22 @@
                 marked.setOptions({ gfm: true, breaks: true, mangle: false, headerIds: false });
             }
 
+            // ★ 追加: ユーザーの最初の操作でAudioContextを初期化
+            const initAudio = () => {
+                if (audioContext) return;
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    if (audioContext.state === 'suspended') {
+                        audioContext.resume();
+                    }
+                } catch (e) {
+                    console.error("Web Audio API is not supported in this browser.", e);
+                }
+            };
+            document.body.addEventListener('click', initAudio, { once: true });
+            document.body.addEventListener('keydown', initAudio, { once: true });
+
+
             settingsForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 const apiKey = apiKeyInput.value.trim();
@@ -916,6 +957,7 @@
             }
         }
 
+        // Initialize the application
         initializeApp();
     </script>
 </body>

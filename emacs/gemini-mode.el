@@ -10,6 +10,7 @@
 
 (require 'json)
 (require 'url)
+(require 'url-http)
 
 ;;; カスタム変数
 
@@ -55,35 +56,46 @@
 (defun gemini--insert-response (response-text)
   "Geminiからの応答をバッファの最後に挿入する。"
   (goto-char (point-max))
-  ;; 最後の "user: " プロンプトが空なら削除
   (when (looking-back "^user:[ \t]*\n?$" (line-beginning-position))
     (delete-region (line-beginning-position) (point)))
-  ;; 末尾の空白を削除
   (delete-blank-lines)
   (unless (eq (char-before) ?\n) (insert "\n"))
   (insert (format "\n---\nmodel: %s\n---\nuser: " response-text))
   (message "Geminiからの応答を受信しました。"))
 
+;; ★★★ 修正されたコールバック関数 ★★★
 (defun gemini--handle-response (status original-buffer)
   "url-retrieveの非同期コールバック。応答を処理する。"
-  (with-current-buffer (url-retrieve-buffer)
-    (let ((response-status (url-http-response-status status))
-          (response-body (buffer-string)))
-      (unwind-protect
-          (if (= 200 response-status)
-              (let* ((json-object (json-read-from-string response-body))
-                     (candidates (cdr (assoc 'candidates json-object)))
-                     (first-candidate (car candidates))
-                     (content (cdr (assoc 'content first-candidate)))
-                     (parts (cdr (assoc 'parts content)))
-                     (first-part (car parts))
-                     (text (or (cdr (assoc 'text first-part)) "")))
-                (with-current-buffer original-buffer
-                  (gemini--insert-response text)))
-            (display-buffer (current-buffer))
-            (error "Gemini APIエラー (HTTP %d): %s" response-status response-body))
-        ;; Ensure the retrieve buffer is killed even on error
-        (kill-buffer (current-buffer))))))
+  ;; このコールバックは、応答データを含むバッファをカレントバッファとして実行される。
+  (let ((response-buffer (current-buffer))
+        (response-status (url-http-response-status status)))
+    (if (= 200 response-status)
+        ;; --- 成功した場合 ---
+        (progn
+          (let* ((json-object (json-read-from-string (buffer-string)))
+                 (text "（応答の解析に失敗しました）"))
+            ;; 安全にJSONを解析
+            (let ((candidates (cdr (assoc 'candidates json-object))))
+              (when candidates
+                (let* ((first-candidate (car candidates))
+                       (content (cdr (assoc 'content first-candidate))))
+                  (when content
+                    (let* ((parts (cdr (assoc 'parts content)))
+                           (first-part (car parts)))
+                      (when first-part
+                        (setq text (or (cdr (assoc 'text first-part)) "（空の応答）")))))))))
+            ;; 元のバッファに応答を挿入
+            (with-current-buffer original-buffer
+              (gemini--insert-response text)))
+          ;; 成功したので応答バッファは不要
+          (kill-buffer response-buffer))
+      ;; --- 失敗した場合 ---
+      (progn
+        (with-current-buffer original-buffer
+          (message "Gemini APIエラー (HTTP %d)。詳細はバッファ '%s' を参照してください。"
+                   response-status (buffer-name response-buffer)))
+        ;; 応答バッファをユーザーに見せる
+        (display-buffer response-buffer))))
 
 
 ;;; メイン関数
@@ -105,8 +117,6 @@
          (url-request-extra-headers '(("Content-Type" . "application/json")))
          (url-request-data json-payload))
     (message "Geminiにリクエストを送信中 (モデル: %s)..." gemini-model)
-    ;; ★★★ 修正点 ★★★
-    ;; コールバックに渡す追加引数はリストでなければならない
     (url-retrieve url 'gemini--handle-response (list (current-buffer)))))
 
 

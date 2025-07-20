@@ -1,23 +1,39 @@
-import os
 import sys
+import argparse
 import google.generativeai as genai
 
 def main():
     """
     メインの処理を実行する関数
     """
-    # 1. 環境変数から Gemini のモデル名と API キーを取得する
-    try:
-        api_key = os.environ['GEMINI_API_KEY']
-        model_name = os.environ['GEMINI_MODEL_NAME']
-    except KeyError as e:
-        print(f"エラー: 環境変数 {e} が設定されていません。")
-        print("実行前に GEMINI_API_KEY と GEMINI_MODEL_NAME を設定してください。")
-        sys.exit(1)
+    # 1. コマンド引数から Gemini のモデル名と API キーを取得する
+    parser = argparse.ArgumentParser(
+        description="Gemini APIと対話するCLIツール。",
+        formatter_class=argparse.RawTextHelpFormatter # ヘルプメッセージの改行を保持
+    )
+    parser.add_argument(
+        "--model", "-m", 
+        type=str, 
+        required=True, 
+        help="使用するGeminiのモデル名 (例: gemini-1.5-flash-latest)"
+    )
+    parser.add_argument(
+        "--api-key", "-k", 
+        type=str, 
+        required=True, 
+        help="あなたのGemini APIキー"
+    )
+    args = parser.parse_args()
 
     # Gemini API の設定
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(model_name)
+    try:
+        genai.configure(api_key=args.api_key)
+        model = genai.GenerativeModel(args.model)
+    except Exception as e:
+        print(f"エラー: APIキーまたはモデル名の設定に失敗しました。")
+        print(f"詳細: {e}")
+        sys.exit(1)
+
 
     print("Geminiとの対話を開始します。")
     print("プロンプトを入力し、最後に '---' だけの行を入力して送信してください。")
@@ -31,7 +47,7 @@ def main():
         while True:
             try:
                 line = sys.stdin.readline()
-                # readline()はEOFで空文字列を返すためチェック
+                # readline()はEOFで空文字列を返すか、入力終了の合図かチェック
                 if not line or line.strip() == '---':
                     break
                 lines.append(line)

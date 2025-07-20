@@ -181,15 +181,17 @@
             border-bottom-left-radius: 4px;
         }
         
-        .ai-message .message-content p { margin-top: 0; margin-bottom: 0.5em; }
-        .ai-message .message-content p:last-child { margin-bottom: 0; }
-        .ai-message .message-content ul, .ai-message .message-content ol { padding-left: 20px; margin-top: 0.5em; margin-bottom: 0.5em; }
-        .ai-message .message-content li { margin-bottom: 0.25em; }
-        .ai-message .message-content blockquote { border-left: 4px solid #ccc; padding-left: 10px; margin-left: 0; color: #666; font-style: italic; }
-        .ai-message .message-content a { color: var(--primary-color); }
-        .ai-message .message-content table { border-collapse: collapse; margin: 1em 0; width: 100%; }
-        .ai-message .message-content th, .ai-message .message-content td { border: 1px solid #ccc; padding: 8px; }
-        .ai-message .message-content th { background-color: #f0f0f0; }
+        .ai-message .message-content p, .user-message .message-content p { margin-top: 0; margin-bottom: 0.5em; }
+        .ai-message .message-content p:last-child, .user-message .message-content p:last-child { margin-bottom: 0; }
+        .ai-message .message-content ul, .ai-message .message-content ol,
+        .user-message .message-content ul, .user-message .message-content ol { padding-left: 20px; margin-top: 0.5em; margin-bottom: 0.5em; }
+        .ai-message .message-content li, .user-message .message-content li { margin-bottom: 0.25em; }
+        .ai-message .message-content blockquote, .user-message .message-content blockquote { border-left: 4px solid #ccc; padding-left: 10px; margin-left: 0; color: #666; font-style: italic; }
+        .ai-message .message-content a, .user-message .message-content a { color: var(--primary-color); }
+        .ai-message .message-content table, .user-message .message-content table { border-collapse: collapse; margin: 1em 0; width: 100%; }
+        .ai-message .message-content th, .ai-message .message-content td,
+        .user-message .message-content th, .user-message .message-content td { border: 1px solid #ccc; padding: 8px; }
+        .ai-message .message-content th, .user-message .message-content th { background-color: #f0f0f0; }
 
         mjx-container { text-align: left !important; }
 
@@ -208,7 +210,7 @@
             word-break: break-all;
             overflow-y: auto;
         }
-        .ai-message .message-content > p > code, .ai-message .message-content > ul li code, .ai-message .message-content > ol li code {
+        .message-content > p > code, .message-content > ul li code, .message-content > ol li code {
             background-color: rgba(0,0,0,0.08);
             padding: 2px 5px;
             border-radius: 4px;
@@ -395,7 +397,6 @@
             addMessageToDisplay('model', welcomeText, [], timestamp);
         }
         
-        // ★ 変更: timestamp引数を追加
         function renderFormattedContent(container, text, timestamp) {
             const placeholders = new Map();
             let placeholderId = 0;
@@ -420,7 +421,6 @@
                         ? hljs.highlight(code, { language, ignoreIllegals: true }).value
                         : hljs.highlightAuto(code).value;
                     
-                    // ★ 変更: codeBlocksにタイムスタンプも保存
                     codeBlocks.set(blockId, { code, language, timestamp });
 
                     blockHtml = `
@@ -464,52 +464,58 @@
             }
         }
         
+        // ★ 変更: ユーザーメッセージもMarkdown等でレンダリングするように関数を再構成
         function addMessageToDisplay(sender, text, files = [], timestamp = null) {
             const messageDate = timestamp ? new Date(timestamp) : new Date();
             const messageRow = document.createElement('div');
             messageRow.classList.add('message-row', sender === 'user' ? 'user' : 'ai');
+            
             const messageEl = document.createElement('div');
             messageEl.classList.add('message', sender === 'user' ? 'user-message' : 'ai-message');
+            
             const contentEl = document.createElement('div');
             contentEl.classList.add('message-content');
 
-            if (sender === 'model') {
-                // ★ 変更: timestampを渡す
+            // テキストコンテンツがある場合、Markdown、数式、コードとしてレンダリングする
+            if (text) {
                 renderFormattedContent(contentEl, text, timestamp);
-            } else {
-                if (text) {
-                    contentEl.textContent = text;
-                    contentEl.style.whiteSpace = 'pre-wrap';
-                }
-                if (files.length > 0) {
-                    const filesContainer = document.createElement('div');
-                    filesContainer.className = 'message-files-container';
-                    if (text) filesContainer.style.marginTop = '8px';
-                    files.forEach(file => {
-                        const isFileObject = file instanceof File;
-                        const isReconstructed = !!file.isReconstructed;
-                        const mimeType = isFileObject ? file.type : (file.inlineData ? file.inlineData.mimeType : (isReconstructed ? 'text/plain' : ''));
-                        const fileName = isFileObject ? file.name : (isReconstructed ? file.name : `添付ファイル (${mimeType})`);
-                        const isImage = mimeType && mimeType.startsWith('image/');
-                        if (isImage) {
-                            const img = document.createElement('img');
-                            if (isFileObject) {
-                                img.src = URL.createObjectURL(file);
-                                img.onload = () => URL.revokeObjectURL(img.src);
-                            } else {
-                                img.src = `data:${mimeType};base64,${file.inlineData.data}`;
-                            }
-                            filesContainer.appendChild(img);
-                        } else {
-                            const fileItem = document.createElement('div');
-                            fileItem.className = 'file-display-item';
-                            fileItem.innerHTML = `<svg viewBox="0 0 24 24"><path fill="currentColor" d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" /></svg><span>${fileName}</span>`;
-                            filesContainer.appendChild(fileItem);
-                        }
-                    });
-                    contentEl.appendChild(filesContainer);
-                }
             }
+
+            // ユーザーメッセージでファイルがある場合の処理
+            if (sender === 'user' && files.length > 0) {
+                const filesContainer = document.createElement('div');
+                filesContainer.className = 'message-files-container';
+                if (text) filesContainer.style.marginTop = '8px'; // テキストがあればマージンを追加
+                
+                files.forEach(file => {
+                    const isFileObject = file instanceof File;
+                    const isReconstructed = !!file.isReconstructed;
+                    const mimeType = isFileObject ? file.type : (file.inlineData ? file.inlineData.mimeType : (isReconstructed ? 'text/plain' : ''));
+                    const fileName = isFileObject ? file.name : (isReconstructed ? file.name : `添付ファイル (${mimeType})`);
+                    const isImage = mimeType && mimeType.startsWith('image/');
+                    
+                    if (isImage) {
+                        const img = document.createElement('img');
+                        if (isFileObject) {
+                            img.src = URL.createObjectURL(file);
+                            img.onload = () => URL.revokeObjectURL(img.src);
+                        } else {
+                            img.src = `data:${mimeType};base64,${file.inlineData.data}`;
+                        }
+                        filesContainer.appendChild(img);
+                    } else {
+                        const fileItem = document.createElement('div');
+                        fileItem.className = 'file-display-item';
+                        fileItem.innerHTML = `<svg viewBox="0 0 24 24"><path fill="currentColor" d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" /></svg><span>${fileName}</span>`;
+                        filesContainer.appendChild(fileItem);
+                    }
+                });
+                contentEl.appendChild(filesContainer);
+            }
+            
+            messageEl.appendChild(contentEl);
+
+            // タイムスタンプとコピーボタンの追加
             const timestampEl = document.createElement('div');
             timestampEl.classList.add('message-timestamp');
             timestampEl.textContent = messageDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
@@ -518,9 +524,9 @@
             copyBtn.className = 'copy-message-btn';
             copyBtn.title = 'メッセージをコピー';
             copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
-            copyBtn.setAttribute('data-copy-text', text);
+            copyBtn.setAttribute('data-copy-text', text); // コピー対象は元のMarkdownテキスト
             
-            messageEl.appendChild(contentEl);
+            // 要素をDOMに追加
             messageRow.appendChild(messageEl);
             messageRow.appendChild(copyBtn);
             messageRow.appendChild(timestampEl);
@@ -704,7 +710,6 @@
             }
         }
 
-        // ★ 変更: ファイル名の生成ロジックを更新
         function handleDownloadClick(code, language, messageDate) {
             const langMap = { 'javascript': 'js', 'python': 'py', 'html': 'html', 'css': 'css', 'java': 'java', 'csharp': 'cs', 'cpp': 'cpp', 'ruby': 'rb', 'go': 'go', 'shell': 'sh', 'bash': 'sh', 'json': 'json', 'sql': 'sql', 'typescript': 'ts', 'xml': 'xml', 'yaml': 'yaml', 'svg': 'svg' };
             const extension = langMap[language.toLowerCase()] || 'txt';
@@ -839,7 +844,6 @@
                     if (codeButton.classList.contains('code-copy-btn')) {
                         navigator.clipboard.writeText(block.code).then(() => showToast("コードをコピーしました！"));
                     } else {
-                        // ★ 変更: 保存されたタイムスタンプからDateオブジェクトを生成して渡す
                         const messageDate = block.timestamp ? new Date(block.timestamp) : new Date();
                         handleDownloadClick(block.code, block.language, messageDate);
                     }

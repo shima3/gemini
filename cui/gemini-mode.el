@@ -69,19 +69,21 @@
   (with-current-buffer (url-retrieve-buffer)
     (let ((response-status (url-http-response-status status))
           (response-body (buffer-string)))
-      (if (= 200 response-status)
-          (let* ((json-object (json-read-from-string response-body))
-                 (candidates (cdr (assoc 'candidates json-object)))
-                 (first-candidate (car candidates))
-                 (content (cdr (assoc 'content first-candidate)))
-                 (parts (cdr (assoc 'parts content)))
-                 (first-part (car parts))
-                 (text (or (cdr (assoc 'text first-part)) "")))
-            (with-current-buffer original-buffer
-              (gemini--insert-response text)))
-        (display-buffer (current-buffer))
-        (error "Gemini APIエラー (HTTP %d): %s" response-status response-body))))
-  (kill-buffer (url-retrieve-buffer)))
+      (unwind-protect
+          (if (= 200 response-status)
+              (let* ((json-object (json-read-from-string response-body))
+                     (candidates (cdr (assoc 'candidates json-object)))
+                     (first-candidate (car candidates))
+                     (content (cdr (assoc 'content first-candidate)))
+                     (parts (cdr (assoc 'parts content)))
+                     (first-part (car parts))
+                     (text (or (cdr (assoc 'text first-part)) "")))
+                (with-current-buffer original-buffer
+                  (gemini--insert-response text)))
+            (display-buffer (current-buffer))
+            (error "Gemini APIエラー (HTTP %d): %s" response-status response-body))
+        ;; Ensure the retrieve buffer is killed even on error
+        (kill-buffer (current-buffer))))))
 
 
 ;;; メイン関数
@@ -103,7 +105,9 @@
          (url-request-extra-headers '(("Content-Type" . "application/json")))
          (url-request-data json-payload))
     (message "Geminiにリクエストを送信中 (モデル: %s)..." gemini-model)
-    (url-retrieve url 'gemini--handle-response (current-buffer))))
+    ;; ★★★ 修正点 ★★★
+    ;; コールバックに渡す追加引数はリストでなければならない
+    (url-retrieve url 'gemini--handle-response (list (current-buffer)))))
 
 
 ;;; モード定義

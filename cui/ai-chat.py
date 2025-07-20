@@ -1,14 +1,63 @@
 import sys
 import argparse
+import json
+import os
 import google.generativeai as genai
+from google.generativeai.types import content_types
+
+# --- Helper Functions for History ---
+
+def save_history(filepath: str, history: list[content_types.StrictContentType]):
+    """チャット履歴をJSONファイルに保存する"""
+    try:
+        # geminiのContentオブジェクトをJSONシリアライズ可能な辞書に変換
+        serializable_history = []
+        for content in history:
+            # safety_ratingsやcitation_metadataを除外してシンプルな構造にする
+            serializable_parts = [{'text': part.text} for part in content.parts]
+            serializable_history.append({
+                'role': content.role,
+                'parts': serializable_parts
+            })
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(serializable_history, f, ensure_ascii=False, indent=2)
+        print(f"\nチャット履歴を {filepath} に保存しました。")
+    except Exception as e:
+        print(f"\nエラー: 履歴の保存に失敗しました。詳細: {e}")
+
+def load_history(filepath: str) -> list[content_types.StrictContentType]:
+    """JSONファイルからチャット履歴を読み込む"""
+    if not os.path.exists(filepath):
+        return [] # ファイルがなければ空の履歴を返す
+    
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            # ファイルが空の場合の対策
+            content = f.read()
+            if not content:
+                return []
+            serializable_history = json.loads(content)
+        
+        # 辞書をgeminiのContentオブジェクトに変換
+        history = [
+            content_types.to_content(item) for item in serializable_history
+        ]
+        print(f"チャット履歴を {filepath} から復元しました。")
+        return history
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+        print(f"警告: 履歴ファイルの読み込みに失敗しました。新しいセッションを開始します。詳細: {e}")
+        return []
+    except Exception as e:
+        print(f"警告: 予期せぬエラーで履歴の読み込みに失敗しました。詳細: {e}")
+        return []
+
+# --- Main Application ---
 
 def main():
-    """
-    メインの処理を実行する関数
-    """
-    # 1. コマンド引数から Gemini のモデル名と API キーを取得する
+    """メインの処理を実行する関数"""
     parser = argparse.ArgumentParser(
-        description="Gemini APIと対話するCLIツール（履歴保持機能付き）。",
+        description="Gemini APIと対話するCLIツール（永続的な履歴保持機能付き）。",
         formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument(
@@ -23,6 +72,13 @@ def main():
         required=True, 
         help="あなたのGemini APIキー"
     )
+    # ★★★ 変更点1: 履歴ファイルを指定する引数を追加 ★★★
+    parser.add_argument(
+        "--history-file", "-f",
+        type=str,
+        default=None,
+        help="チャット履歴を保存/復元するJSONファイルのパス (例: chat_history.json)"
+    )
     args = parser.parse_args()
 
     # Gemini API の設定
@@ -30,54 +86,65 @@ def main():
         genai.configure(api_key=args.api_key)
         model = genai.GenerativeModel(args.model)
         
-        # ★★★ 修正点1: チャットセッションを開始 ★★★
-        chat = model.start_chat(history=[])
+        # ★★★ 変更点2: ファイルから履歴を読み込む ★★★
+        initial_history = []
+        if args.history_file:
+            initial_history = load_history(args.history_file)
+            
+        chat = model.start_chat(history=initial_history)
         
     except Exception as e:
-        print(f"エラー: APIキーまたはモデル名の設定に失敗しました。")
-        print(f"詳細: {e}")
+        print(f"エラー: APIキーまたはモデル名の設定に失敗しました。詳細: {e}")
         sys.exit(1)
 
-
-    print("Geminiとの対話を開始します。（履歴保持モード）")
+    print("Geminiとの対話を開始します。（永続履歴モード）")
+    if args.history_file:
+        print(f"履歴ファイル: {args.history_file}")
     print("プロンプトを入力し、最後に '---' だけの行を入力して送信してください。")
     print("プロンプトを何も入力せずに '---' を入力すると終了します。")
     print("-" * 20)
 
-    # 6. 2に戻る (無限ループ)
-    while True:
-        # 2. 標準入力から文字列を入力する
-        lines = []
+    try:
         while True:
-            try:
-                line = sys.stdin.readline()
-                if not line or line.strip() == '---':
+            lines = []
+            while True:
+                try:
+                    line = sys.stdin.readline()
+                    if not line or line.strip() == '---':
+                        break
+                    lines.append(line)
+                except UnicodeDecodeError as e:
+                    print(f"\n警告: 文字コードエラーを検出しました。入力を無視します。詳細: {e}")
+                    # 不正な入力行をクリア
+                    lines.clear()
                     break
-                lines.append(line)
-            except KeyboardInterrupt:
-                print("\nプログラムを終了します。")
-                sys.exit(0)
+
+            prompt = "".join(lines).strip()
+
+            if not prompt:
+                # Ctrl+D (EOF) または入力なしでの終了
+                break 
+
+            print("\n... Geminiに送信中 ...\n")
+
+            try:
+                response = chat.send_message(prompt)
+                print(response.text)
+                print("===")
+            except Exception as e:
+                print(f"APIの呼び出し中にエラーが発生しました: {e}")
+                print("===")
+                
+    except KeyboardInterrupt:
+        # Ctrl+Cで中断
+        print("\nプログラムを中断します。")
+    finally:
+        # ★★★ 変更点3: プログラム終了時に履歴を保存する ★★★
+        if args.history_file and 'chat' in locals() and chat.history:
+            save_history(args.history_file, chat.history)
         
-        prompt = "".join(lines)
+        print("プログラムを終了します。")
 
-        # 3. 1行も入力がなければプログラムを終了する
-        if not prompt.strip():
-            print("入力がなかったため、プログラムを終了します。")
-            break
-
-        print("\n... Geminiに送信中 ...\n")
-
-        try:
-            # ★★★ 修正点2: chat.send_message() を使用して履歴を保持 ★★★
-            response = chat.send_message(prompt)
-            
-            # 5. Geminiの回答を標準出力に出力した後、イコール3文字だけの行を出力する
-            print(response.text)
-            print("===")
-
-        except Exception as e:
-            print(f"APIの呼び出し中にエラーが発生しました: {e}")
-            print("===")
 
 if __name__ == "__main__":
     main()

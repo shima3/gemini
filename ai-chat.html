@@ -81,7 +81,6 @@
         header h1 { margin: 0; font-size: 1.2em; }
         #settings-toggle { background: none; border: 1px solid white; color: white; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.8em; }
         
-        /* 変更点: formになったため、paddingを内部の要素に移動 */
         #settings-form { border-bottom: 1px solid var(--border-color); }
         #settings-form.hidden { display: none; }
         .settings-content { padding: 20px; }
@@ -153,7 +152,6 @@
             border-bottom-left-radius: 4px;
         }
         
-        /* Markdown用スタイル */
         .ai-message .message-content p { margin-top: 0; margin-bottom: 0.5em; }
         .ai-message .message-content p:last-child { margin-bottom: 0; }
         .ai-message .message-content ul, .ai-message .message-content ol { padding-left: 20px; margin-top: 0.5em; margin-bottom: 0.5em; }
@@ -195,7 +193,6 @@
         .file-display-item { display: inline-flex; align-items: center; gap: 8px; background-color: rgba(0, 0, 0, 0.05); padding: 6px 12px; border-radius: 16px; font-size: 0.9em; }
         .file-display-item svg { width: 16px; height: 16px; fill: #555; flex-shrink: 0; }
 
-        /* Loading Indicator Styles */
         .typing-indicator-bubble {
             background-color: var(--ai-message-bg);
             border-radius: 18px;
@@ -256,22 +253,18 @@
             <button id="settings-toggle">設定</button>
         </header>
 
-        <!-- ★ 変更点: div#settings-container を form#settings-form に変更 -->
         <form id="settings-form" class="hidden">
             <div class="settings-content">
                 <div class="settings-grid">
                     <div class="form-group">
                         <label for="model-input">モデル</label>
-                        <!-- name属性を追加 -->
                         <input type="text" id="model-input" name="model" placeholder="例: gemini-2.5-pro">
                     </div>
                     <div class="form-group">
                         <label for="api-key">APIキー</label>
-                        <!-- name属性を追加 -->
                         <input type="password" id="api-key" name="apiKey" placeholder="Google AI Studioで取得したキー">
                     </div>
                 </div>
-                <!-- 設定適用ボタンを追加 -->
                 <div class="apply-settings-wrapper">
                     <button type="submit" class="history-buttons button-label" style="background-color: var(--primary-color); color: white; border: none; padding: 10px 20px;">適用</button>
                 </div>
@@ -287,7 +280,6 @@
                 <div class="history-management">
                     <h4>対話履歴の管理</h4>
                     <div class="history-buttons">
-                        <!-- type="button" を追加してフォーム送信を抑制 -->
                         <button id="download-history-btn" type="button">履歴をダウンロード</button>
                         <label for="upload-history-input" class="button-label">履歴をアップロード</label>
                         <input type="file" id="upload-history-input" accept=".json,application/json" style="display: none;">
@@ -301,7 +293,6 @@
 
         <div id="chat-container">
             <div id="chat-history"></div>
-            <!-- Loading indicator will be added here by JS -->
             <form id="chat-form">
                 <div id="chat-form-container">
                     <div id="input-wrapper">
@@ -329,7 +320,8 @@
         let codeBlockIdCounter = 0;
 
         // DOM Elements
-        const settingsForm = document.getElementById('settings-form'); // ★変更点: settings-containerから変更
+        const appContainer = document.querySelector('.app-container');
+        const settingsForm = document.getElementById('settings-form');
         const settingsToggleBtn = document.getElementById('settings-toggle');
         const apiKeyInput = document.getElementById('api-key');
         const modelInput = document.getElementById('model-input');
@@ -355,6 +347,7 @@
         let messageTimestamps = [];
         let attachedFiles = [];
         let loadingIndicator;
+        let debugMode = null; // ★ 追加: デバッグモードの状態を保持
 
         const TEXT_MIME_TYPES = ['application/json', 'application/xml', 'application/javascript', 'application/csv', 'application/x-sh'];
         const TEXT_EXTENSIONS = [ 'txt', 'md', 'html', 'css', 'js', 'ts', 'jsx', 'tsx', 'json', 'xml', 'csv', 'py', 'rb', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'sh', 'bat', 'ps1', 'sql', 'log', 'ini', 'toml', 'yaml', 'yml', 'svg', 'go', 'php', 'swift' ];
@@ -494,12 +487,8 @@
             chatHistory.appendChild(messageRow);
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
-
-        // ★ 変更点: localStorageへの保存処理は不要になったため、この関数は削除
-        // function saveAndReinitializeChat() { ... }
         
         function setupChat() {
-            // ★ 変更点: apiKeyはinputから直接取得 (initializeAppでURLから設定済み)
             const apiKey = apiKeyInput.value.trim();
             if (!apiKey) { displayError("APIキーが設定されていません。"); chatContainer.style.display = 'none'; return; }
             try {
@@ -517,6 +506,25 @@
             e.preventDefault();
             const userInput = messageInput.value.trim();
             if (!userInput && attachedFiles.length === 0) return;
+
+            // ★ 変更点: デバッグモードの処理
+            if (debugMode) {
+                const filesToDisplay = [...attachedFiles];
+                const timestamp = new Date().toISOString();
+                
+                if (debugMode === 'user') {
+                    addMessageToDisplay('user', userInput, filesToDisplay, timestamp);
+                } else if (debugMode === 'ai') {
+                    addMessageToDisplay('model', userInput, [], timestamp);
+                }
+                
+                attachedFiles = [];
+                renderFilePreview();
+                messageInput.value = '';
+                autoResizeTextarea();
+                return; // API通信は行わないのでここで処理を終了
+            }
+
             inputWrapper.classList.add('submitting');
             sendButton.disabled = true; messageInput.disabled = true; fileInput.disabled = true;
             fileInputLabel.style.cssText = 'cursor: not-allowed; opacity: 0.5;';
@@ -611,7 +619,6 @@
                     if (loadedData.version === "1.0" && Array.isArray(loadedData.history)) {
                         newHistory = loadedData.history.map(entry => { const { timestamp, ...rest } = entry; return rest; });
                         newTimestamps = loadedData.history.map(entry => entry.timestamp);
-                        // ★ 変更点: localStorageへの保存を削除し、ユーザーに設定適用を促す
                         if (loadedData.model) {
                             modelInput.value = loadedData.model;
                             updateAppTitle();
@@ -623,7 +630,10 @@
                     conversationHistory = newHistory;
                     messageTimestamps = [new Date().toISOString(), ...newTimestamps];
                     rebuildChatDisplay(conversationHistory, messageTimestamps);
-                    setupChat(); 
+                    // ★ 変更点: デバッグモードでない場合のみチャットを初期化
+                    if (!debugMode) {
+                        setupChat(); 
+                    }
                     settingsForm.classList.add('hidden');
                     showToast("履歴をアップロードしました。");
                 } catch (error) { displayError(`履歴の読み込みに失敗しました: ${error.message}`); } finally { event.target.value = ''; }
@@ -665,14 +675,13 @@
             a.href = url;
             const h = String(messageDate.getHours()).padStart(2, '0');
             const min = String(messageDate.getMinutes()).padStart(2, '0');
-            // const s = String(messageDate.getSeconds()).padStart(2, '0');
             a.download = `code-${h}${min}.${extension}`;
             document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
         }
         
         function showToast(message) {
             toastNotification.textContent = message; toastNotification.classList.add('show');
-            setTimeout(() => { toastNotification.classList.remove('show'); }, 3000); // 少し長めに表示
+            setTimeout(() => { toastNotification.classList.remove('show'); }, 3000);
         }
 
         function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
@@ -712,7 +721,6 @@
                 marked.setOptions({ gfm: true, breaks: true, mangle: false, headerIds: false });
             }
 
-            // ★ 変更点: 設定フォームのsubmitイベントを処理
             settingsForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 const apiKey = apiKeyInput.value.trim();
@@ -724,16 +732,11 @@
                 const newUrlParams = new URLSearchParams();
                 newUrlParams.set('model', model);
                 newUrlParams.set('apiKey', apiKey);
-                // ページをリロードして新しい設定を適用
                 window.location.search = newUrlParams.toString();
             });
 
             settingsToggleBtn.addEventListener('click', () => settingsForm.classList.toggle('hidden'));
             
-            // ★ 変更点: inputのchangeイベントリスナーは不要なので削除
-            // apiKeyInput.addEventListener('change', ...);
-            // modelInput.addEventListener('change', ...);
-
             chatForm.addEventListener('submit', handleChatSubmit);
             messageInput.addEventListener('input', autoResizeTextarea);
             messageInput.addEventListener('keydown', handleKeyDown);
@@ -770,21 +773,43 @@
                 </div>
             `;
 
-            // ★ 変更点: localStorageの代わりにURLパラメータから設定を読み込む
+            // ★ 変更点: URLパラメータから設定を読み込む（デバッグモード対応）
             const urlParams = new URLSearchParams(window.location.search);
             const apiKeyFromUrl = urlParams.get('apiKey');
             const modelFromUrl = urlParams.get('model');
+            debugMode = urlParams.get('debugMode');
             
-            // フォームに値を設定
             apiKeyInput.value = apiKeyFromUrl || '';
             modelInput.value = modelFromUrl || 'gemini-2.5-pro';
             updateAppTitle();
 
-            if (apiKeyFromUrl) {
+            if (debugMode === 'user' || debugMode === 'ai') {
+                // デバッグモードの場合、APIキーのチェックをせずチャットUIを表示
+                settingsForm.classList.add('hidden');
+                chatContainer.style.display = 'flex';
+                clearError();
+                displayInitialWelcomeMessage();
+                
+                // デバッグモードの通知を表示
+                const debugNotice = document.createElement('div');
+                debugNotice.style.cssText = 'background-color: #fff3cd; color: #856404; padding: 10px 20px; text-align: center; font-weight: bold; border-bottom: 1px solid var(--border-color); font-size: 0.9em;';
+                debugNotice.textContent = `デバッグモード (${debugMode}) で動作中`;
+                appContainer.insertBefore(debugNotice, settingsForm.nextSibling);
+
+                // 履歴管理機能を無効化
+                const historyManagement = document.querySelector('.history-management');
+                if (historyManagement) {
+                    historyManagement.style.opacity = '0.5';
+                    historyManagement.style.pointerEvents = 'none';
+                    const historyButtons = historyManagement.querySelectorAll('button, label');
+                    historyButtons.forEach(btn => btn.tabIndex = -1);
+                }
+
+            } else if (apiKeyFromUrl) {
                 // APIキーがURLにあれば、設定画面を隠し、チャットを初期化
                 settingsForm.classList.add('hidden');
                 setupChat();
-                if (chat) { // setupChatが成功した場合のみ
+                if (chat) {
                      displayInitialWelcomeMessage();
                 }
             } else {

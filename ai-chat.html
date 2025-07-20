@@ -145,20 +145,20 @@
             border: none;
             cursor: pointer;
             padding: 4px;
-            margin: 0 4px;
+            // margin: 0 4px;
             display: flex;
             align-items: center;
             justify-content: center;
             border-radius: 4px;
-            align-self: flex-end;
-            visibility: hidden;
-            opacity: 0;
+            // align-self: flex-end;
+            // visibility: hidden;
+            opacity: 0.6;
             transition: opacity 0.2s, background-color 0.2s;
         }
-        .message-row:hover .copy-message-btn {
+        /* .message-row:hover .copy-message-btn {
             visibility: visible;
             opacity: 0.7;
-        }
+        } */
         .copy-message-btn:hover {
             opacity: 1;
             background-color: rgba(0,0,0,0.08);
@@ -282,6 +282,13 @@
         .history-buttons { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
         .history-buttons button, .history-buttons .button-label { padding: 8px 15px; border: 1px solid var(--primary-color); background-color: white; color: var(--primary-color); border-radius: 5px; cursor: pointer; font-size: 0.9em; font-weight: 500; transition: background-color 0.2s, color 0.2s; text-align: center; display: inline-block; }
         .history-buttons button:hover, .history-buttons .button-label:hover { background-color: var(--primary-color); color: white; }
+        .meta-container {
+          display: flex;
+          flex-direction: column-reverse; /* 要素を縦に、かつ逆順に並べる（時刻が下に、ボタンが上に） */
+          align-items: center; /* 水平方向中央揃え */
+          gap: 4px; /* ボタンと時刻の間の隙間 */
+          flex-shrink: 0; /* 右側の要素がメッセージに押されて縮むのを防ぐ */
+        }
     </style>
 </head>
 <body>
@@ -556,10 +563,17 @@
             copyBtn.title = 'メッセージをコピー';
             copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
             copyBtn.setAttribute('data-copy-text', text);
-            
+
+            // コピーボタンとタイムスタンプをまとめるコンテナを作成
+            const metaContainer = document.createElement('div');
+            metaContainer.className = 'meta-container';
+            // コンテナにコピーボタンとタイムスタンプを追加
+            metaContainer.appendChild(timestampEl);
+            metaContainer.appendChild(copyBtn);
+            // メッセージ本体と、新しく作ったコンテナをメッセージ行に追加
             messageRow.appendChild(messageEl);
-            messageRow.appendChild(copyBtn);
-            messageRow.appendChild(timestampEl);
+            messageRow.appendChild(metaContainer);
+
             chatHistory.appendChild(messageRow);
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }

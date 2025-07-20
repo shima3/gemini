@@ -140,7 +140,6 @@
             flex-shrink: 0;
         }
 
-        /* ★ 追加: メッセージコピーボタンのスタイル */
         .copy-message-btn {
             background: none;
             border: none;
@@ -151,13 +150,13 @@
             align-items: center;
             justify-content: center;
             border-radius: 4px;
-            align-self: flex-end; /* タイムスタンプと高さを合わせる */
-            visibility: hidden; /* デフォルトで非表示 */
+            align-self: flex-end;
+            visibility: hidden;
             opacity: 0;
             transition: opacity 0.2s, background-color 0.2s;
         }
         .message-row:hover .copy-message-btn {
-            visibility: visible; /* 行にホバーした時に表示 */
+            visibility: visible;
             opacity: 0.7;
         }
         .copy-message-btn:hover {
@@ -463,7 +462,6 @@
             }
         }
         
-        // ★ 変更: メッセージコピーボタンの生成ロジックを追加
         function addMessageToDisplay(sender, text, files = [], timestamp = null) {
             const messageDate = timestamp ? new Date(timestamp) : new Date();
             const messageRow = document.createElement('div');
@@ -753,6 +751,38 @@
         
         function handleKeyDown(e) { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); chatForm.requestSubmit(); } }
 
+        // ★ 追加: クリップボードからのペーストを処理する関数
+        function handlePaste(e) {
+            if (inputWrapper.classList.contains('submitting')) return;
+            const clipboardData = e.clipboardData || window.clipboardData;
+            if (!clipboardData) return;
+
+            const items = clipboardData.items;
+            const filesToPaste = [];
+
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
+                    const file = items[i].getAsFile();
+                    if (file) {
+                        const timestamp = new Date().getTime();
+                        const extension = file.type.split('/')[1] || 'png';
+                        const newName = `pasted-image-${timestamp}.${extension}`;
+                        // Fileオブジェクトのnameは直接変更できないため、新しいFileオブジェクトを作成
+                        const newFile = new File([file], newName, {
+                            type: file.type,
+                            lastModified: file.lastModified,
+                        });
+                        filesToPaste.push(newFile);
+                    }
+                }
+            }
+
+            if (filesToPaste.length > 0) {
+                e.preventDefault(); // テキストとしてペーストされるのを防ぐ
+                addFiles(filesToPaste);
+            }
+        }
+
         function initializeApp() {
             if (typeof marked !== 'undefined') {
                 marked.setOptions({ gfm: true, breaks: true, mangle: false, headerIds: false });
@@ -778,16 +808,17 @@
             messageInput.addEventListener('input', autoResizeTextarea);
             messageInput.addEventListener('keydown', handleKeyDown);
             fileInput.addEventListener('change', handleFileSelect);
+
             ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => inputWrapper.addEventListener(eName, preventDefaults, false));
             ['dragenter', 'dragover'].forEach(eName => inputWrapper.addEventListener(eName, () => inputWrapper.classList.add('drag-over'), false));
             ['dragleave', 'drop'].forEach(eName => inputWrapper.addEventListener(eName, () => inputWrapper.classList.remove('drag-over'), false));
             inputWrapper.addEventListener('drop', handleFileDrop, false);
+            inputWrapper.addEventListener('paste', handlePaste, false); // ★ 追加: ペーストイベントリスナー
+
             downloadHistoryBtn.addEventListener('click', handleDownloadHistory);
             uploadHistoryInput.addEventListener('change', handleUploadHistory);
             
-            // ★ 変更: メッセージコピーとコードブロックコピーの両方を処理
             chatHistory.addEventListener('click', (e) => {
-                // Handle code block buttons
                 const codeButton = e.target.closest('.code-copy-btn, .code-download-btn');
                 if (codeButton) {
                     const wrapper = codeButton.closest('.code-block-wrapper');
@@ -802,7 +833,6 @@
                     return;
                 }
                 
-                // Handle message copy button
                 const msgCopyButton = e.target.closest('.copy-message-btn');
                 if (msgCopyButton) {
                     const textToCopy = msgCopyButton.dataset.copyText;

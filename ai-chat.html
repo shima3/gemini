@@ -140,6 +140,36 @@
             flex-shrink: 0;
         }
 
+        /* ★ 追加: メッセージコピーボタンのスタイル */
+        .copy-message-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            margin: 0 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            align-self: flex-end; /* タイムスタンプと高さを合わせる */
+            visibility: hidden; /* デフォルトで非表示 */
+            opacity: 0;
+            transition: opacity 0.2s, background-color 0.2s;
+        }
+        .message-row:hover .copy-message-btn {
+            visibility: visible; /* 行にホバーした時に表示 */
+            opacity: 0.7;
+        }
+        .copy-message-btn:hover {
+            opacity: 1;
+            background-color: rgba(0,0,0,0.08);
+        }
+        .copy-message-btn svg {
+            width: 16px;
+            height: 16px;
+            fill: #555;
+        }
+
         .message-content { white-space: normal; word-break: break-word; }
         .message-content img { max-width: 100%; border-radius: 8px; margin-top: 8px; }
 
@@ -347,7 +377,7 @@
         let messageTimestamps = [];
         let attachedFiles = [];
         let loadingIndicator;
-        let debugMode = null; // ★ 追加: デバッグモードの状態を保持
+        let debugMode = null; 
 
         const TEXT_MIME_TYPES = ['application/json', 'application/xml', 'application/javascript', 'application/csv', 'application/x-sh'];
         const TEXT_EXTENSIONS = [ 'txt', 'md', 'html', 'css', 'js', 'ts', 'jsx', 'tsx', 'json', 'xml', 'csv', 'py', 'rb', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'sh', 'bat', 'ps1', 'sql', 'log', 'ini', 'toml', 'yaml', 'yml', 'svg', 'go', 'php', 'swift' ];
@@ -433,6 +463,7 @@
             }
         }
         
+        // ★ 変更: メッセージコピーボタンの生成ロジックを追加
         function addMessageToDisplay(sender, text, files = [], timestamp = null) {
             const messageDate = timestamp ? new Date(timestamp) : new Date();
             const messageRow = document.createElement('div');
@@ -481,8 +512,16 @@
             const timestampEl = document.createElement('div');
             timestampEl.classList.add('message-timestamp');
             timestampEl.textContent = messageDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-message-btn';
+            copyBtn.title = 'メッセージをコピー';
+            copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>`;
+            copyBtn.setAttribute('data-copy-text', text);
+            
             messageEl.appendChild(contentEl);
             messageRow.appendChild(messageEl);
+            messageRow.appendChild(copyBtn);
             messageRow.appendChild(timestampEl);
             chatHistory.appendChild(messageRow);
             chatHistory.scrollTop = chatHistory.scrollHeight;
@@ -507,7 +546,6 @@
             const userInput = messageInput.value.trim();
             if (!userInput && attachedFiles.length === 0) return;
 
-            // ★ 変更点: デバッグモードの処理
             if (debugMode) {
                 const filesToDisplay = [...attachedFiles];
                 const timestamp = new Date().toISOString();
@@ -522,7 +560,7 @@
                 renderFilePreview();
                 messageInput.value = '';
                 autoResizeTextarea();
-                return; // API通信は行わないのでここで処理を終了
+                return;
             }
 
             inputWrapper.classList.add('submitting');
@@ -630,7 +668,6 @@
                     conversationHistory = newHistory;
                     messageTimestamps = [new Date().toISOString(), ...newTimestamps];
                     rebuildChatDisplay(conversationHistory, messageTimestamps);
-                    // ★ 変更点: デバッグモードでない場合のみチャットを初期化
                     if (!debugMode) {
                         setupChat(); 
                     }
@@ -748,17 +785,35 @@
             downloadHistoryBtn.addEventListener('click', handleDownloadHistory);
             uploadHistoryInput.addEventListener('change', handleUploadHistory);
             
+            // ★ 変更: メッセージコピーとコードブロックコピーの両方を処理
             chatHistory.addEventListener('click', (e) => {
-                const button = e.target.closest('.code-copy-btn, .code-download-btn');
-                if (!button) return;
-                const wrapper = button.closest('.code-block-wrapper');
-                const blockId = wrapper?.dataset.blockId;
-                const block = blockId ? codeBlocks.get(blockId) : null;
-                if (!block) return;
-                if (button.classList.contains('code-copy-btn')) {
-                    navigator.clipboard.writeText(block.code).then(() => showToast("コピーしました！"));
-                } else {
-                    handleDownloadClick(block.code, block.language, new Date());
+                // Handle code block buttons
+                const codeButton = e.target.closest('.code-copy-btn, .code-download-btn');
+                if (codeButton) {
+                    const wrapper = codeButton.closest('.code-block-wrapper');
+                    const blockId = wrapper?.dataset.blockId;
+                    const block = blockId ? codeBlocks.get(blockId) : null;
+                    if (!block) return;
+                    if (codeButton.classList.contains('code-copy-btn')) {
+                        navigator.clipboard.writeText(block.code).then(() => showToast("コードをコピーしました！"));
+                    } else {
+                        handleDownloadClick(block.code, block.language, new Date());
+                    }
+                    return;
+                }
+                
+                // Handle message copy button
+                const msgCopyButton = e.target.closest('.copy-message-btn');
+                if (msgCopyButton) {
+                    const textToCopy = msgCopyButton.dataset.copyText;
+                    if (textToCopy !== null && textToCopy !== undefined) {
+                        navigator.clipboard.writeText(textToCopy).then(() => {
+                            showToast("メッセージをコピーしました！");
+                        }).catch(err => {
+                            console.error('Failed to copy text:', err);
+                            showToast("コピーに失敗しました。");
+                        });
+                    }
                 }
             });
 
@@ -773,7 +828,6 @@
                 </div>
             `;
 
-            // ★ 変更点: URLパラメータから設定を読み込む（デバッグモード対応）
             const urlParams = new URLSearchParams(window.location.search);
             const apiKeyFromUrl = urlParams.get('apiKey');
             const modelFromUrl = urlParams.get('model');
@@ -784,19 +838,16 @@
             updateAppTitle();
 
             if (debugMode === 'user' || debugMode === 'ai') {
-                // デバッグモードの場合、APIキーのチェックをせずチャットUIを表示
                 settingsForm.classList.add('hidden');
                 chatContainer.style.display = 'flex';
                 clearError();
                 displayInitialWelcomeMessage();
                 
-                // デバッグモードの通知を表示
                 const debugNotice = document.createElement('div');
                 debugNotice.style.cssText = 'background-color: #fff3cd; color: #856404; padding: 10px 20px; text-align: center; font-weight: bold; border-bottom: 1px solid var(--border-color); font-size: 0.9em;';
                 debugNotice.textContent = `デバッグモード (${debugMode}) で動作中`;
                 appContainer.insertBefore(debugNotice, settingsForm.nextSibling);
 
-                // 履歴管理機能を無効化
                 const historyManagement = document.querySelector('.history-management');
                 if (historyManagement) {
                     historyManagement.style.opacity = '0.5';
@@ -806,21 +857,18 @@
                 }
 
             } else if (apiKeyFromUrl) {
-                // APIキーがURLにあれば、設定画面を隠し、チャットを初期化
                 settingsForm.classList.add('hidden');
                 setupChat();
                 if (chat) {
                      displayInitialWelcomeMessage();
                 }
             } else {
-                // APIキーがなければ、設定画面を表示
                 settingsForm.classList.remove('hidden');
                 displayError("APIキーが設定されていません。設定画面でAPIキーとモデル名を入力し、「適用」を押してください。");
                 chatContainer.style.display = 'none';
             }
         }
 
-        // Initialize the application
         initializeApp();
     </script>
 </body>

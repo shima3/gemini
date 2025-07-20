@@ -395,7 +395,8 @@
             addMessageToDisplay('model', welcomeText, [], timestamp);
         }
         
-        function renderFormattedContent(container, text) {
+        // ★ 変更: timestamp引数を追加
+        function renderFormattedContent(container, text, timestamp) {
             const placeholders = new Map();
             let placeholderId = 0;
 
@@ -419,7 +420,8 @@
                         ? hljs.highlight(code, { language, ignoreIllegals: true }).value
                         : hljs.highlightAuto(code).value;
                     
-                    codeBlocks.set(blockId, { code, language });
+                    // ★ 変更: codeBlocksにタイムスタンプも保存
+                    codeBlocks.set(blockId, { code, language, timestamp });
 
                     blockHtml = `
                         <div class="code-block-wrapper" data-block-id="${blockId}">
@@ -472,7 +474,8 @@
             contentEl.classList.add('message-content');
 
             if (sender === 'model') {
-                renderFormattedContent(contentEl, text);
+                // ★ 変更: timestampを渡す
+                renderFormattedContent(contentEl, text, timestamp);
             } else {
                 if (text) {
                     contentEl.textContent = text;
@@ -701,6 +704,7 @@
             }
         }
 
+        // ★ 変更: ファイル名の生成ロジックを更新
         function handleDownloadClick(code, language, messageDate) {
             const langMap = { 'javascript': 'js', 'python': 'py', 'html': 'html', 'css': 'css', 'java': 'java', 'csharp': 'cs', 'cpp': 'cpp', 'ruby': 'rb', 'go': 'go', 'shell': 'sh', 'bash': 'sh', 'json': 'json', 'sql': 'sql', 'typescript': 'ts', 'xml': 'xml', 'yaml': 'yaml', 'svg': 'svg' };
             const extension = langMap[language.toLowerCase()] || 'txt';
@@ -708,10 +712,19 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
+
+            const yyyy = messageDate.getFullYear();
+            const mm = String(messageDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(messageDate.getDate()).padStart(2, '0');
             const h = String(messageDate.getHours()).padStart(2, '0');
             const min = String(messageDate.getMinutes()).padStart(2, '0');
-            a.download = `code-${h}${min}.${extension}`;
-            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            
+            a.download = `code-${yyyy}${mm}${dd}-${h}${min}.${extension}`;
+            
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
         
         function showToast(message) {
@@ -751,7 +764,6 @@
         
         function handleKeyDown(e) { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); chatForm.requestSubmit(); } }
 
-        // ★ 追加: クリップボードからのペーストを処理する関数
         function handlePaste(e) {
             if (inputWrapper.classList.contains('submitting')) return;
             const clipboardData = e.clipboardData || window.clipboardData;
@@ -767,7 +779,6 @@
                         const timestamp = new Date().getTime();
                         const extension = file.type.split('/')[1] || 'png';
                         const newName = `pasted-image-${timestamp}.${extension}`;
-                        // Fileオブジェクトのnameは直接変更できないため、新しいFileオブジェクトを作成
                         const newFile = new File([file], newName, {
                             type: file.type,
                             lastModified: file.lastModified,
@@ -778,7 +789,7 @@
             }
 
             if (filesToPaste.length > 0) {
-                e.preventDefault(); // テキストとしてペーストされるのを防ぐ
+                e.preventDefault();
                 addFiles(filesToPaste);
             }
         }
@@ -813,7 +824,7 @@
             ['dragenter', 'dragover'].forEach(eName => inputWrapper.addEventListener(eName, () => inputWrapper.classList.add('drag-over'), false));
             ['dragleave', 'drop'].forEach(eName => inputWrapper.addEventListener(eName, () => inputWrapper.classList.remove('drag-over'), false));
             inputWrapper.addEventListener('drop', handleFileDrop, false);
-            inputWrapper.addEventListener('paste', handlePaste, false); // ★ 追加: ペーストイベントリスナー
+            inputWrapper.addEventListener('paste', handlePaste, false);
 
             downloadHistoryBtn.addEventListener('click', handleDownloadHistory);
             uploadHistoryInput.addEventListener('change', handleUploadHistory);
@@ -828,7 +839,9 @@
                     if (codeButton.classList.contains('code-copy-btn')) {
                         navigator.clipboard.writeText(block.code).then(() => showToast("コードをコピーしました！"));
                     } else {
-                        handleDownloadClick(block.code, block.language, new Date());
+                        // ★ 変更: 保存されたタイムスタンプからDateオブジェクトを生成して渡す
+                        const messageDate = block.timestamp ? new Date(block.timestamp) : new Date();
+                        handleDownloadClick(block.code, block.language, messageDate);
                     }
                     return;
                 }

@@ -8,8 +8,8 @@ def main():
     """
     # 1. コマンド引数から Gemini のモデル名と API キーを取得する
     parser = argparse.ArgumentParser(
-        description="Gemini APIと対話するCLIツール。",
-        formatter_class=argparse.RawTextHelpFormatter # ヘルプメッセージの改行を保持
+        description="Gemini APIと対話するCLIツール（履歴保持機能付き）。",
+        formatter_class=argparse.RawTextHelpFormatter
     )
     parser.add_argument(
         "--model", "-m", 
@@ -29,13 +29,17 @@ def main():
     try:
         genai.configure(api_key=args.api_key)
         model = genai.GenerativeModel(args.model)
+        
+        # ★★★ 修正点1: チャットセッションを開始 ★★★
+        chat = model.start_chat(history=[])
+        
     except Exception as e:
         print(f"エラー: APIキーまたはモデル名の設定に失敗しました。")
         print(f"詳細: {e}")
         sys.exit(1)
 
 
-    print("Geminiとの対話を開始します。")
+    print("Geminiとの対話を開始します。（履歴保持モード）")
     print("プロンプトを入力し、最後に '---' だけの行を入力して送信してください。")
     print("プロンプトを何も入力せずに '---' を入力すると終了します。")
     print("-" * 20)
@@ -47,7 +51,6 @@ def main():
         while True:
             try:
                 line = sys.stdin.readline()
-                # readline()はEOFで空文字列を返すか、入力終了の合図かチェック
                 if not line or line.strip() == '---':
                     break
                 lines.append(line)
@@ -65,8 +68,8 @@ def main():
         print("\n... Geminiに送信中 ...\n")
 
         try:
-            # 4. 入力した文字列を Gemini API で送信する
-            response = model.generate_content(prompt)
+            # ★★★ 修正点2: chat.send_message() を使用して履歴を保持 ★★★
+            response = chat.send_message(prompt)
             
             # 5. Geminiの回答を標準出力に出力した後、イコール3文字だけの行を出力する
             print(response.text)

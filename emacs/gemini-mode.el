@@ -13,12 +13,12 @@
 ;;; カスタム変数
 
 (defcustom gemini-api-key nil
-  "Google Gemini APIキー。Google AI Studioから取得してください。"
+  "Google Gemini APIキー。Google AI Studioから取得してください。環境変数 `GEMINI_API_KEY` が優先されます。"
   :type 'string
   :group 'gemini)
 
 (defcustom gemini-model "gemini-1.5-flash-latest"
-  "使用するGoogle Geminiのモデル名。"
+  "使用するGoogle Geminiのモデル名。環境変数 `GEMINI_MODEL` が優先されます。"
   :type 'string
   :group 'gemini)
 
@@ -29,6 +29,17 @@
   "メッセージの区切りを示す文字列。")
 
 ;;; 内部ヘルパー関数
+
+(defun gemini--get-api-key ()
+  "環境変数 `GEMINI_API_KEY` からAPIキーを取得する。
+なければ `gemini-api-key` カスタム変数の値を使用する。"
+  (or (getenv "GEMINI_API_KEY") gemini-api-key))
+
+(defun gemini--get-model ()
+  "環境変数 `GEMINI_MODEL` からモデル名を取得する。
+なければ `gemini-model` カスタム変数の値を使用する。"
+  (or (getenv "GEMINI_MODEL") gemini-model))
+
 (defun gemini--parse-buffer-and-get-messages ()
   "バッファを解析し、メッセージオブジェクトの「リスト」を確実に返す。"
   (let ((messages-list '()))
@@ -107,27 +118,30 @@ status変数が信頼できない環境があるため、応答バッファを�
 (defun gemini-send ()
   "現在のバッファの内容をGemini APIに送信する。"
   (interactive)
-  (unless (and gemini-api-key (not (string-empty-p gemini-api-key)))
-    (error "Gemini APIキーが設定されていません。(setq gemini-api-key \"...\") で設定してください。"))
+  (let ((api-key (gemini--get-api-key))
+         (model (gemini--get-model)))
+    (unless (and gemini-api-key (not (string-empty-p gemini-api-key)))
+      (error "Gemini APIキーが設定されていません。環境変数 `GEMINI_API_KEY` または (setq gemini-api-key \"...\") で設定してください。"))
 
-  (let* ((messages (gemini--parse-buffer-and-get-messages))
-         ;;【変更点】キーをキーワードシンボルから文字列に変更
-         (payload `(("contents" . ,messages)))
-         ;;【デバッグ強化】payloadの内容を*Messages*バッファに表示
-         (_ (message "---DEBUG PAYLOAD--- %S" payload))
-         (json-payload (json-encode payload))
-         ;;【デバッグ強化】json-encodeの結果を*Messages*バッファに表示
-         (_ (message "---DEBUG JSON--- %S" json-payload))
-         (request-data (encode-coding-string json-payload 'utf-8))
-         (url (format "%s%s:generateContent?key=%s"
-                      gemini-api-base-url
-                      gemini-model
-                      gemini-api-key))
-         (url-request-method "POST")
-         (url-request-extra-headers '(("Content-Type" . "application/json; charset=utf-8")))
-         (url-request-data request-data))
-    (message "Geminiにリクエストを送信中 (モデル: %s)..." gemini-model)
-    (url-retrieve url 'gemini--handle-response (list (current-buffer)))))
+    (let* ((messages (gemini--parse-buffer-and-get-messages))
+            ;;【変更点】キーをキーワードシンボルから文字列に変更
+            (payload `(("contents" . ,messages)))
+            ;;【デバッグ強化】payloadの内容を*Messages*バッファに表示
+            (_ (message "---DEBUG PAYLOAD--- %S" payload))
+            (json-payload (json-encode payload))
+            ;;【デバッグ強化】json-encodeの結果を*Messages*バッファに表示
+            (_ (message "---DEBUG JSON--- %S" json-payload))
+            (request-data (encode-coding-string json-payload 'utf-8))
+            (url (format "%s%s:generateContent?key=%s"
+                   gemini-api-base-url
+                   model   ;;【変更】ローカル変数 model を使用
+                   api-key ;;【変更】ローカル変数 api-key を使用
+                   ))
+            (url-request-method "POST")
+            (url-request-extra-headers '(("Content-Type" . "application/json; charset=utf-8")))
+            (url-request-data request-data))
+      (message "Geminiにリクエストを送信中 (モデル: %s)..." model) ;;【変更】ローカル変数 model を使用
+      (url-retrieve url 'gemini--handle-response (list (current-buffer))))))
 
 ;;; モード定義
 

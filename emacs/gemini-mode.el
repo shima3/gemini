@@ -1,5 +1,11 @@
 ;;; gemini-mode.el --- A simple Emacs client for Google Gemini -*- lexical-binding: t; -*-
 
+;; - gemini-mode のバッファを作成する。
+;; - バッファ内のマイナス3文字のみからなる行をメッセージの区切りと解釈する。
+;; - メッセージの区切りの直後の行の先頭が「user:」ならばユーザからのメッセージ、「model:」ならば Gemini からのメッセージと解釈する。
+;; - ユーザが Ctrl+Enter を押すと、バッファにあるユーザからの最後のメッセージをプロンプトとし、その他のメッセージを履歴として Gemini に送信する。
+;; - Gemini からの応答を受信したとき、バッファの最後にメッセージの区切り、「model:」、Gemini からのメッセージ、メッセージの区切り、「user:」を挿入する。
+
 (require 'json)
 (require 'url)
 (require 'url-http)
@@ -11,7 +17,7 @@
   :type 'string
   :group 'gemini)
 
-(defcustom gemini-model "gemini-pro"
+(defcustom gemini-model "gemini-1.5-flash-latest"
   "使用するGoogle Geminiのモデル名。"
   :type 'string
   :group 'gemini)

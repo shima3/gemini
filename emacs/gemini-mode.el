@@ -1,13 +1,5 @@
 ;;; gemini-mode.el --- A simple Emacs client for Google Gemini -*- lexical-binding: t; -*-
 
-;; Gemini APIと通信するためのシンプルなモード。
-;;
-;; 使い方:
-;; 1. (setq gemini-api-key "YOUR_API_KEY") を init.el に設定してください。
-;; 2. (setq gemini-model "gemini-1.5-pro-latest") のようにモデル名も設定できます。
-;; 3. M-x gemini でチャットバッファを開始します。
-;; 4. プロンプトを入力し、C-<return> を押して Gemini に送信します。
-
 (require 'json)
 (require 'url)
 (require 'url-http)
@@ -27,98 +19,109 @@
 (defconst gemini-api-base-url "https://generativelanguage.googleapis.com/v1beta/models/"
   "Gemini APIのベースURL。")
 
-(defconst gemini-message-separator "^---\n"
-  "メッセージの区切りを示す正規表現。")
+(defconst gemini-message-separator "\n---\n"
+  "メッセージの区切りを示す文字列。")
 
 ;;; 内部ヘルパー関数
-
-(defun gemini--parse-buffer ()
-  "現在のバッファを解析し、Gemini APIのフォーマットに合ったメッセージリストを返す。"
-  (let ((messages '()))
-    (save-excursion
-      (goto-char (point-min))
-      (let ((parts (split-string (buffer-string) gemini-message-separator t "[ \t\n]+")))
-        (dolist (part parts)
-          (with-temp-buffer
-            (insert part)
-            (goto-char (point-min))
-            (let ((role (cond ((looking-at "user:") "user")
-                              ((looking-at "model:") "model")
-                              (t nil)))
-                  (content ""))
-              (when role
-                (forward-line 1)
-                (setq content (string-trim (buffer-substring-no-properties (point) (point-max))))
-                (unless (string-empty-p content)
-                  (push `(:role ,role :parts ((:text . ,content))) messages))))))))
-    (nreverse messages)))
+(defun gemini--parse-buffer-and-get-messages ()
+  "バッファを解析し、メッセージオブジェクトの「リスト」を確実に返す。"
+  (let ((messages-list '()))
+    ;;【変更点】split-string の不要な第4引数 `t` を削除。
+    ;; 第4引数は正規表現を期待するため、`t` を渡すとエラーになるのが原因でした。
+    (dolist (part (split-string (buffer-string) gemini-message-separator t))
+      (let ((trimmed-part (string-trim part)) role content)
+        (cond
+         ((string-prefix-p "user:" trimmed-part)
+          (setq role "user")
+          (setq content (substring trimmed-part 5)))
+         ((string-prefix-p "model:" trimmed-part)
+          (setq role "model")
+          (setq content (substring trimmed-part 6))))
+        ;; 有効なメッセージのみをリストに追加
+        (when (and role content (not (string-empty-p (string-trim content))))
+          ;; 安定性のためキーは文字列のままにしておきます
+          (push `(("role" . ,role) ("parts" . ((("text" . ,(string-trim content)))))) messages-list))))
+    ;; リストを正しい順序にして返す
+    (nreverse messages-list)))
 
 (defun gemini--insert-response (response-text)
   "Geminiからの応答をバッファの最後に挿入する。"
   (goto-char (point-max))
-  (when (looking-back "^user:[ \t]*\n?$" (line-beginning-position))
+  (when (looking-back "^user:[ \t]*$" (line-beginning-position))
     (delete-region (line-beginning-position) (point)))
   (delete-blank-lines)
-  (unless (eq (char-before) ?\n) (insert "\n"))
-  (insert (format "\n---\nmodel: %s\n---\nuser: " response-text))
+  (unless (string-suffix-p gemini-message-separator (buffer-substring-no-properties (point-min) (point-max)))
+    (insert gemini-message-separator))
+  (insert (format "model: %s%suser: " response-text gemini-message-separator))
   (message "Geminiからの応答を受信しました。"))
 
-;; ★★★ 修正されたコールバック関数 ★★★
 (defun gemini--handle-response (status original-buffer)
-  "url-retrieveの非同期コールバック。応答を処理する。"
-  ;; このコールバックは、応答データを含むバッファをカレントバッファとして実行される。
-  (let ((response-buffer (current-buffer))
-        (response-status (url-http-response-status status)))
-    (if (= 200 response-status)
-        ;; --- 成功した場合 ---
-        (progn
-          (let* ((json-object (json-read-from-string (buffer-string)))
-                 (text "（応答の解析に失敗しました）"))
-            ;; 安全にJSONを解析
-            (let ((candidates (cdr (assoc 'candidates json-object))))
-              (when candidates
-                (let* ((first-candidate (car candidates))
-                       (content (cdr (assoc 'content first-candidate))))
-                  (when content
-                    (let* ((parts (cdr (assoc 'parts content)))
-                           (first-part (car parts)))
-                      (when first-part
-                        (setq text (or (cdr (assoc 'text first-part)) "（空の応答）")))))))))
-            ;; 元のバッファに応答を挿入
-            (with-current-buffer original-buffer
-              (gemini--insert-response text)))
-          ;; 成功したので応答バッファは不要
-          (kill-buffer response-buffer))
-      ;; --- 失敗した場合 ---
-      (progn
-        (with-current-buffer original-buffer
-          (message "Gemini APIエラー (HTTP %d)。詳細はバッファ '%s' を参照してください。"
-                   response-status (buffer-name response-buffer)))
-        ;; 応答バッファをユーザーに見せる
-        (display-buffer response-buffer))))
+  "url-retrieveの非同期コールバック。応答を処理する。
+status変数が信頼できない環境があるため、応答バッファを直接読んで成否を判断する。"
+  (let ((response-buffer (current-buffer)))
+    (with-current-buffer response-buffer
+      (goto-char (point-min))
+      (if (re-search-forward "^HTTP/[0-9.]+[ \t]+200[ \t]" nil t)
+          ;; --- 通信が成功した場合 (HTTP 200) ---
+          (progn
+            (goto-char (point-min))
+            (unless (re-search-forward "\n\r?\n\r?" nil t)
+              (error "Could not find end of HTTP headers in response"))
+            (let* ((json-raw-text (buffer-substring-no-properties (point) (point-max)))
+                   (json-text (decode-coding-string json-raw-text 'utf-8))
+                   ;;【変更点】JSON配列をベクターではなくリストとして読み込むように指定
+                   (json-object (let ((json-array-type 'list))
+                                  (json-read-from-string json-text)))
+                   (text "（応答の解析に失敗しました）"))
+              (condition-case err
+                  (let* ((candidates (cdr (assoc 'candidates json-object)))
+                         (first-candidate (car candidates))
+                         (content (cdr (assoc 'content first-candidate)))
+                         (parts (cdr (assoc 'parts content)))
+                         (first-part (car parts)))
+                    (setq text (or (cdr (assoc 'text first-part)) "（空の応答）")))
+                ('error (setq text (format "（JSON解析エラー: %s）" err))))
+              (with-current-buffer original-buffer
+                (gemini--insert-response text)))
+            (kill-buffer response-buffer))
 
+        ;; --- 通信が失敗した場合 (HTTP 200以外) ---
+        (progn
+          (goto-char (point-min))
+          (let ((error-code-str
+                 (if (re-search-forward "^HTTP/[0-9.]+[ \t]+\\([0-9]+\\)" nil t)
+                     (match-string-no-properties 1)
+                   "unknown")))
+            (with-current-buffer original-buffer
+              (message "Gemini APIエラー (HTTP %s)。詳細はバッファ '%s' を参照してください。"
+                       error-code-str (buffer-name response-buffer))))
+          (display-buffer response-buffer))))))
 
 ;;; メイン関数
-
 (defun gemini-send ()
   "現在のバッファの内容をGemini APIに送信する。"
   (interactive)
   (unless (and gemini-api-key (not (string-empty-p gemini-api-key)))
     (error "Gemini APIキーが設定されていません。(setq gemini-api-key \"...\") で設定してください。"))
 
-  (let* ((messages (gemini--parse-buffer))
-         (payload `(:contents ,messages))
+  (let* ((messages (gemini--parse-buffer-and-get-messages))
+         ;;【変更点】キーをキーワードシンボルから文字列に変更
+         (payload `(("contents" . ,messages)))
+         ;;【デバッグ強化】payloadの内容を*Messages*バッファに表示
+         (_ (message "---DEBUG PAYLOAD--- %S" payload))
          (json-payload (json-encode payload))
+         ;;【デバッグ強化】json-encodeの結果を*Messages*バッファに表示
+         (_ (message "---DEBUG JSON--- %S" json-payload))
+         (request-data (encode-coding-string json-payload 'utf-8))
          (url (format "%s%s:generateContent?key=%s"
                       gemini-api-base-url
                       gemini-model
                       gemini-api-key))
          (url-request-method "POST")
-         (url-request-extra-headers '(("Content-Type" . "application/json")))
-         (url-request-data json-payload))
+         (url-request-extra-headers '(("Content-Type" . "application/json; charset=utf-8")))
+         (url-request-data request-data))
     (message "Geminiにリクエストを送信中 (モデル: %s)..." gemini-model)
     (url-retrieve url 'gemini--handle-response (list (current-buffer)))))
-
 
 ;;; モード定義
 
@@ -126,10 +129,8 @@
   "Google Geminiと対話するためのメジャーモード。"
   :syntax-table nil
   :abbrev-table nil
-
   (setq-local comment-start "#")
   (setq-local comment-end "")
-
   (define-key gemini-mode-map (kbd "C-<return>") 'gemini-send))
 
 
@@ -142,7 +143,7 @@
     (switch-to-buffer buffer)
     (gemini-mode)
     (when (= (point-min) (point-max))
-      (insert "---\nuser: "))))
+      (insert "user: "))))
 
 (provide 'gemini-mode)
 
